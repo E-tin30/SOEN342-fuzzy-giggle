@@ -1,0 +1,35 @@
+# Compiled files
+*.class
+
+# Build output
+target/
+build/
+out/
+bin/
+
+# Gradle
+.gradle/
+
+# Packaged files
+*.jar
+*.war
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment and secrets
+.env
