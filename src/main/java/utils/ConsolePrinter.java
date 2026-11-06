@@ -5,7 +5,6 @@ public class ConsolePrinter {
     public static void greeting() {
         System.out.println("""
                 Welcome to the Appointment Tracking System!
-                
                 """);
     }
 
@@ -22,6 +21,7 @@ public class ConsolePrinter {
 
     public static void printMainMenu() {
         System.out.print("""
+                
                 What would you like to do?
                 1. Search for a patient
                 2. Book an appointment

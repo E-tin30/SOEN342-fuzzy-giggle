@@ -19,9 +19,14 @@ public class AppointmentTrackingSystem {
             Files.createDirectories(Path.of("data"));
 
             try (DatabaseGateway db = new DatabaseGateway("jdbc:sqlite:data/app.db")) {
-                Scanner scanner = new Scanner(System.in);
+                //clear db on start
+                db.clearAll();
+
+                //services
                 CSVService csvService = new CSVService(db);
                 AvailibilityService availabilityService = new AvailibilityService(db);
+
+                Scanner scanner = new Scanner(System.in);
 
                 ConsolePrinter.greeting();
 
