@@ -1,3 +1,5 @@
+package domain;
+
 public class Service {
 
     private final String name;
