@@ -17,10 +17,10 @@ import java.util.List;
 import java.util.Map;
 
 @RequiredArgsConstructor
-public class AvailibilityService {
+public class AvailabilityService {
     private final DatabaseGateway db;
 
-    public List<Availability> getAllAvailibilities() throws SQLException {
+    public List<Availability> getAllAvailabilities() throws SQLException {
         //retrieve from database
         List<AvailabilityRow> rows = db.findAllAvailabilities();
 
