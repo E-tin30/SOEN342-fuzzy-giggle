@@ -57,7 +57,7 @@ public class ConsolePrinter {
                 """);
     }
 
-    // ---------- printing helpers ----------
+    // printing helpers
 
     private static String hm(Time time) {
         return time.toString().substring(0, 5);
@@ -68,7 +68,7 @@ public class ConsolePrinter {
     }
 
     private static String name(Professional p) {
-        return p.getTitle() + " " + p.getFirstName() + " " + p.getLastName();
+        return p.getTitle() + " " + p.getFirst_name() + " " + p.getLast_name();
     }
 
     public static void printPatient(Patient p) {
@@ -95,6 +95,7 @@ public class ConsolePrinter {
         for (int i = 0; i < services.size(); i++) {
             Service s = services.get(i);
             System.out.println((i + 1) + ". " + s.getName()
+                    + " - " + s.getDurationMinutes() + " min"
                     + (s.requiresReferral() ? " (referral required)" : ""));
         }
         System.out.println();
@@ -109,14 +110,18 @@ public class ConsolePrinter {
         System.out.println();
     }
 
-    public static void printAvailabilities(List<Availability> availabilities) {
+    public static void printAvailabilities(List<Availability> availabilities, int minutes) {
         System.out.println();
         for (int i = 0; i < availabilities.size(); i++) {
             Availability a = availabilities.get(i);
             System.out.println((i + 1) + ". " + name(a.getProfessional())
                     + " (" + a.getProfessional().getSpecialization() + ")"
                     + " | " + day(a.getDate())
-                    + " | " + hm(a.getStart()) + " - " + hm(a.getEnd()));
+                    + " | " + hm(a.getStart()) + " - " + hm(a.getEnd())
+                    + " | earliest start: " + hm(a.firstFit(minutes)));
+            for (Appointment booked : a.getAppointments()) {
+                System.out.println("      already booked: " + hm(booked.getStart()) + " - " + hm(booked.getEnd()));
+            }
         }
         System.out.println();
     }

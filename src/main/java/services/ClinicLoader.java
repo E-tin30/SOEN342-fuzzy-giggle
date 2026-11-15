@@ -30,11 +30,11 @@ public class ClinicLoader {
         this.clinic = clinic;
         this.availabilityService = availabilityService;
 
-        register("Family Medicine", new Service("Routine follow-up", false));
-        register("Primary Care", new Service("Primary care assessment", false));
-        register("Cardiology", new Service("Cardiology consultation", true));
-        register("Dermatology", new Service("Dermatology consultation", true));
-        register("Orthopedics", new Service("Orthopedic evaluation", true));
+        register("Family Medicine", new Service("Routine follow-up", false, 30));
+        register("Primary Care", new Service("Primary care assessment", false, 30));
+        register("Cardiology", new Service("Cardiology consultation", true, 45));
+        register("Dermatology", new Service("Dermatology consultation", true, 20));
+        register("Orthopedics", new Service("Orthopedic evaluation", true, 45));
     }
 
     private void register(String specialization, Service service) {
@@ -48,7 +48,7 @@ public class ClinicLoader {
     private Service serviceFor(String specialization) {
         Service service = servicesBySpecialization.get(specialization);
         if (service == null) {
-            service = new Service(specialization + " consultation", false);
+            service = new Service(specialization + " consultation", false, 30);
             register(specialization, service);
         }
         return service;

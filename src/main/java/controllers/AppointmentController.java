@@ -1,5 +1,6 @@
 package controllers;
 
+import java.sql.Time;
 import java.util.List;
 
 import domain.*;
@@ -12,20 +13,16 @@ public class AppointmentController {
     private Patient currentPatient;
     private Service currentService;
     private Referral currentReferral;
-    
+
     // forward to clinic
     public List<Patient> findPatient(PatientSearchSpecification spec){
         return clinic.findPatient(spec);
-    }  
+    }
 
     // set currentPatient
     public void selectPatient(Patient patient){
-        if(patient == null){
-            throw new IllegalArgumentException("Patient can't be null");
-        }
         this.currentPatient = patient;
     }
-        
 
     public List<Availability> requestNewAppointment(Service service){
         // check if clinic offers that service
@@ -59,9 +56,9 @@ public class AppointmentController {
     }
 
     // select availability
-    public Appointment select(Availability availability){
-        if(availability == null){
-            throw new IllegalArgumentException("Availability can't be null");
+    public Appointment select(Availability availability, Time start){
+        if(availability == null || start == null){
+            throw new IllegalArgumentException("Availability and start time can't be null");
         }
         if(currentPatient == null){
             throw new IllegalStateException("No patient selected");
@@ -73,10 +70,10 @@ public class AppointmentController {
             throw new ReferralRequiredException("This service requires a referral");
         }
 
-        Appointment appointment = availability.createAppointment(currentPatient, currentService, currentReferral, clinic);
-        
+        Appointment appointment = availability.createAppointment(currentPatient, currentService, currentReferral, clinic, start, currentService.getDurationMinutes());
+
         if(appointment == null){
-            return null; // already booked
+            return null; // that time no longer fits
         }
 
         this.currentPatient.addAppointment(appointment);

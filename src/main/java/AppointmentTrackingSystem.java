@@ -20,6 +20,7 @@ import utils.ConsolePrinter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Date;
+import java.sql.Time;
 import java.util.List;
 import java.util.Scanner;
 
@@ -99,7 +100,7 @@ public class AppointmentTrackingSystem {
                             try {
                                 csvService.importAvailabilitiesFromCSV(file);
                             } catch (Exception e) {
-                                ConsolePrinter.error("Unable to add availabilities: " + e);
+                                ConsolePrinter.error("Unable to add availabilities.");
                             }
                         }
                         case 6 -> {
@@ -201,21 +202,23 @@ public class AppointmentTrackingSystem {
     // case 2
 
     private static void bookAppointmentFlow(Clinic clinic, AppointmentController controller) {
-        // find and select the patient
+        // 1. find and select the patient
         List<Patient> patients = searchPatientFlow(controller);
         if (patients.isEmpty()) return;
         int p = pick("Pick the patient (number, blank to cancel): ", patients.size());
         if (p < 0) return;
         controller.selectPatient(patients.get(p));
 
-        // choose the service
+        // 2. choose the service
         List<Service> services = clinic.getOfferedServices();
         ConsolePrinter.printServices(services);
         int s = pick("Pick the service (number, blank to cancel): ", services.size());
         if (s < 0) return;
         Service service = services.get(s);
 
-        // request the appointment (may need a referral first)
+        int minutes = service.getDurationMinutes();
+
+        // 3. request the appointment (may need a referral first)
         List<Availability> options;
         try {
             options = controller.requestNewAppointment(service);
@@ -234,14 +237,26 @@ public class AppointmentTrackingSystem {
             return;
         }
 
-        // choose a slot
-        ConsolePrinter.printAvailabilities(options);
-        int a = pick("Pick a time slot (number, blank to cancel): ", options.size());
+        // 4. choose a slot
+        ConsolePrinter.printAvailabilities(options, minutes);
+        int a = pick("Pick an availability (number, blank to cancel): ", options.size());
         if (a < 0) return;
+        Availability chosen = options.get(a);
 
-        Appointment appointment = controller.select(options.get(a));
+        Time start = chosen.firstFit(minutes);
+        String in = ask("Start time (hh:mm, blank = " + start.toString().substring(0, 5) + "): ");
+        if (!in.isEmpty()) {
+            try {
+                start = Time.valueOf(in + ":00");
+            } catch (IllegalArgumentException e) {
+                ConsolePrinter.error("Invalid time, expected hh:mm.");
+                return;
+            }
+        }
+
+        Appointment appointment = controller.select(chosen, start);
         if (appointment == null) {
-            ConsolePrinter.error("Sorry, that slot was just taken. Please try again.");
+            ConsolePrinter.error("That time doesn't work: a " + minutes + "-minute appointment must start and end inside the availability and not overlap an appointment that is already booked.");
             return;
         }
         ConsolePrinter.printAppointment(appointment);
@@ -281,11 +296,13 @@ public class AppointmentTrackingSystem {
             range = new DateRange(from, to == null ? from : to);
         }
 
+        int minutes = (service == null) ? 1 : service.getDurationMinutes();
+
         List<Availability> results = controller.searchAvailability(service, professional, range);
         if (results.isEmpty()) {
             ConsolePrinter.error("No availability found.");
         } else {
-            ConsolePrinter.printAvailabilities(results);
+            ConsolePrinter.printAvailabilities(results, minutes);
         }
     }
 }

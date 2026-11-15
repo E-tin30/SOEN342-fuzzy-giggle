@@ -5,15 +5,13 @@ import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.Setter;
 
 @AllArgsConstructor
 @Getter
-@Setter
 public class Professional {
     private final int id;
-    private final String firstName;
-    private final String lastName;
+    private final String first_name;
+    private final String last_name;
     private final String title;
     private final String specialization;
     private final List<Service> offeredServices = new ArrayList<>();
@@ -43,11 +41,11 @@ public class Professional {
         return this.offeredServices.contains(service);
     }
 
-    // get availabilities for a professional given a date range (null for no range)
-    public List<Availability> getAvailabilities(DateRange range){
+    // get availabilities within the date range (null for no range) that still have room for the needed minutes
+    public List<Availability> getAvailabilities(DateRange range, int minutes){
         List<Availability> open = new ArrayList<>();
         for(Availability availability : this.availabilities){
-            if(!availability.isBooked() && availability.isWithin(range)){
+            if(availability.isWithin(range) && availability.firstFit(minutes) != null){
                 open.add(availability);
             }
         }

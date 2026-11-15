@@ -5,7 +5,6 @@ import java.util.List;
 import java.time.LocalDate;
 import java.sql.Date;
 
-
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -90,11 +89,12 @@ public class Clinic {
     }
 
     public List<Availability> searchAvailability(Service service, Professional professional, DateRange range) {
+        int minutes = (service == null) ? 1 : service.getDurationMinutes(); // no service = any free time
         List<Availability> results = new ArrayList<>();
         for (Professional p : professionals) {
             if (professional != null && !p.equals(professional)) continue; // wrong professional
             if (service != null && !p.offersService(service)) continue; // doesn't offer service
-            results.addAll(p.getAvailabilities(range)); // null range = no filter
+            results.addAll(p.getAvailabilities(range, minutes)); // null range = no filter
         }
         return results;
     }
