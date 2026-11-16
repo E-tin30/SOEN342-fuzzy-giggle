@@ -52,15 +52,15 @@ public class CSVService {
                 }
 
                 try {
-                    String first_name = c.get(0).trim();
-                    String last_name = c.get(1).trim();
+                    String firstName = c.get(0).trim();
+                    String lastName = c.get(1).trim();
                     String title = c.get(2).trim();
                     String specialization = c.get(3).trim();
                     LocalDate date = LocalDate.parse(c.get(4).trim());
                     LocalTime start = LocalTime.parse(c.get(5).trim());
                     LocalTime end = LocalTime.parse(c.get(6).trim());
 
-                    if (first_name.isEmpty() || last_name.isEmpty()) {
+                    if (firstName.isEmpty() || lastName.isEmpty()) {
                         System.out.println("Line " + lineNo + ": missing name, skipped.");
                         skipped++;
                         continue;
@@ -71,7 +71,7 @@ public class CSVService {
                         continue;
                     }
 
-                    int professionalId = db.findOrCreateProfessional(first_name, last_name, title, specialization);
+                    int professionalId = db.findOrCreateProfessional(firstName, lastName, title, specialization);
                     if (db.addAvailability(professionalId, date, start, end)) {
                         added++;
                     } else {
@@ -101,8 +101,8 @@ public class CSVService {
             writer.newLine();
             for (AvailabilityRow row : rows) {
                 writer.write(String.join(",",
-                        row.first_name(),
-                        row.last_name(),
+                        row.firstName(),
+                        row.lastName(),
                         row.title(),
                         row.specialization(),
                         row.date(),

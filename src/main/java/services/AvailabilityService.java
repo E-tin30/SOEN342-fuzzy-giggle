@@ -17,10 +17,10 @@ import java.util.List;
 import java.util.Map;
 
 @RequiredArgsConstructor
-public class AvailibilityService {
+public class AvailabilityService {
     private final DatabaseGateway db;
 
-    public List<Availability> getAllAvailibilities() throws SQLException {
+    public List<Availability> getAllAvailabilities() throws SQLException {
         //retrieve from database
         List<AvailabilityRow> rows = db.findAllAvailabilities();
 
@@ -30,7 +30,7 @@ public class AvailibilityService {
 
         for (AvailabilityRow r : rows) {
             Professional professional = professionals.computeIfAbsent(r.professionalId(),
-                    id -> new Professional(id, r.first_name(), r.last_name(), r.title(), r.specialization()));
+                    id -> new Professional(id, r.firstName(), r.lastName(), r.title(), r.specialization()));
 
             availabilities.add(new Availability(
                     professional,
