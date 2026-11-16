@@ -10,8 +10,8 @@ import lombok.Getter;
 @Getter
 public class Professional {
     private final int id;
-    private final String first_name;
-    private final String last_name;
+    private final String firstName;
+    private final String lastName;
     private final String title;
     private final String specialization;
     private final List<Service> offeredServices = new ArrayList<>();

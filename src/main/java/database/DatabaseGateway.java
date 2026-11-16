@@ -86,16 +86,16 @@ public class DatabaseGateway implements AutoCloseable {
         professionalCache.clear();
     }
 
-    public int findOrCreateProfessional(String first_name, String last_name,
+    public int findOrCreateProfessional(String firstName, String lastName,
                                         String title, String specialization) throws SQLException {
-        List<String> key = List.of(first_name, last_name, title, specialization);
+        List<String> key = List.of(firstName, lastName, title, specialization);
         Integer cached = professionalCache.get(key);
         if (cached != null) {
             return cached;
         }
 
-        findProfessional.setString(1, first_name);
-        findProfessional.setString(2, last_name);
+        findProfessional.setString(1, firstName);
+        findProfessional.setString(2, lastName);
         findProfessional.setString(3, title);
         findProfessional.setString(4, specialization);
         try (ResultSet rs = findProfessional.executeQuery()) {
@@ -106,8 +106,8 @@ public class DatabaseGateway implements AutoCloseable {
             }
         }
 
-        insertProfessional.setString(1, first_name);
-        insertProfessional.setString(2, last_name);
+        insertProfessional.setString(1, firstName);
+        insertProfessional.setString(2, lastName);
         insertProfessional.setString(3, title);
         insertProfessional.setString(4, specialization);
         insertProfessional.executeUpdate();

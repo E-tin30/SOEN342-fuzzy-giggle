@@ -68,7 +68,7 @@ public class ConsolePrinter {
     }
 
     private static String name(Professional p) {
-        return p.getTitle() + " " + p.getFirst_name() + " " + p.getLast_name();
+        return p.getTitle() + " " + p.getFirstName() + " " + p.getLastName();
     }
 
     public static void printPatient(Patient p) {
