@@ -305,4 +305,21 @@ public class AppointmentTrackingSystem {
             ConsolePrinter.printAvailabilities(results, minutes);
         }
     }
+
+    //case 4
+    private static void makeAvailabilityFlow(Clinic clinic, AvailabilityController controller){
+
+    };
+
+    private static Professional selectProfessional(Clinic clinic){
+
+    };
+
+    private static RepetitionPattern askRepetitionPattern(){
+        
+    };
+
+    private static LocalTime askTime(String prompt){
+
+    };
 }

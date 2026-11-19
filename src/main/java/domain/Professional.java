@@ -2,6 +2,7 @@ package domain;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.*;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -50,5 +51,9 @@ public class Professional {
             }
         }
         return open;
+    }
+
+    public boolean hasOverlappingAvailability(LocalDate date, LocalTime start, LocalTime end){
+
     }
 }
