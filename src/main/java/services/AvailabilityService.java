@@ -42,16 +42,14 @@ public class AvailabilityService {
         return availabilities;
     }
 
-    public boolean createAvailability(Professional professional, LocalDate date,
-                                      LocalTime start, LocalTime end) throws SQLException {
+    public boolean createAvailability(Professional professional, LocalDate date, LocalTime start, LocalTime end) throws SQLException {
         if (date == null) {
             throw new IllegalArgumentException("Availability date cannot be null.");
         }
         return createAvailabilities(professional, List.of(date), start, end) == 1;
     }
 
-    public int createAvailabilities(Professional professional, Collection<LocalDate> dates,
-                                    LocalTime start, LocalTime end) throws SQLException {
+    public int createAvailabilities(Professional professional, Collection<LocalDate> dates, LocalTime start, LocalTime end) throws SQLException {
         validateAvailabilityInput(professional, dates, start, end);
 
         List<Availability> generated = new ArrayList<>();
