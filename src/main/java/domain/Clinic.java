@@ -2,8 +2,6 @@ package domain;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.time.LocalDate;
-import java.sql.Date;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -73,9 +71,7 @@ public class Clinic {
         }
         if (s.dateOfBirth() != null) {
             anyCriterion = true;
-            LocalDate wanted = new Date(s.dateOfBirth().getTime()).toLocalDate();
-            LocalDate actual = new Date(p.getDateOfBirth().getTime()).toLocalDate();
-            if (!wanted.equals(actual)) return false;
+            if (!s.dateOfBirth().equals(p.getDateOfBirth())) return false;
         }
         if (s.firstName() != null) {
             anyCriterion = true;

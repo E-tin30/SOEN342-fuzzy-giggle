@@ -10,8 +10,13 @@ import domain.Clinic;
 import domain.DateRange;
 import domain.Patient;
 import domain.PatientSearchSpecification;
+import domain.Professional;
 import domain.Referral;
+import domain.RepetitionPattern;
 import domain.Service;
+import domain.MonthlyPattern;
+import domain.WeeklyPattern;
+import domain.DailyPattern;
 import services.AvailabilityService;
 import services.CSVService;
 import services.ClinicLoader;
@@ -19,10 +24,16 @@ import utils.ConsolePrinter;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Date;
-import java.sql.Time;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
+import java.util.Set;
 
 //main class of the application
 public class AppointmentTrackingSystem {
@@ -42,21 +53,21 @@ public class AppointmentTrackingSystem {
                 Clinic clinic = new Clinic("Clinic", "Montreal");
                 ActivityLog activityLog = new ActivityLog();
                 AppointmentController appointmentController = new AppointmentController(clinic, activityLog);
-                AvailabilityController availabilityController = new AvailabilityController(clinic);
-
-                clinic.addPatient(new Patient("Émilie", "Lavoie", Date.valueOf("1990-04-12"), "514-555-0101", "LAVE90041201", "RAMQ"));
-                clinic.addPatient(new Patient("Olivier", "Côté", Date.valueOf("1985-09-30"), "514-555-0102", "COTO85093001", "RAMQ"));
-                clinic.addPatient(new Patient("Fatima", "Benali", Date.valueOf("1978-01-22"), "438-555-0103", "BENF78012201", "RAMQ"));
-                clinic.addPatient(new Patient("Thomas", "Girard", Date.valueOf("2001-06-05"), "514-555-0104", "GIRT01060501", "RAMQ"));
-                clinic.addPatient(new Patient("Juliette", "Morin", Date.valueOf("1995-11-18"), "438-555-0105", "MORJ95111801", "RAMQ"));
-                clinic.addPatient(new Patient("Alexandre", "Dubois", Date.valueOf("1969-03-09"), "514-555-0106", "DUBA69030901", "Manulife"));
-                clinic.addPatient(new Patient("Maya", "Nguyen", Date.valueOf("1999-07-27"), "438-555-0107", "NGUM99072701", "Blue Cross"));
-                clinic.addPatient(new Patient("Gabriel", "Fortin", Date.valueOf("1982-12-14"), "514-555-0108", "FORG82121401", "RAMQ"));
 
                 //services
                 CSVService csvService = new CSVService(db);
                 AvailabilityService availabilityService = new AvailabilityService(db);
+                AvailabilityController availabilityController = new AvailabilityController(clinic, availabilityService);
                 ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService);
+
+                clinic.addPatient(new Patient("Émilie", "Lavoie", LocalDate.parse("1990-04-12"), "514-555-0101", "LAVE90041201", "RAMQ"));
+                clinic.addPatient(new Patient("Olivier", "Côté", LocalDate.parse("1985-09-30"), "514-555-0102", "COTO85093001", "RAMQ"));
+                clinic.addPatient(new Patient("Fatima", "Benali", LocalDate.parse("1978-01-22"), "438-555-0103", "BENF78012201", "RAMQ"));
+                clinic.addPatient(new Patient("Thomas", "Girard", LocalDate.parse("2001-06-05"), "514-555-0104", "GIRT01060501", "RAMQ"));
+                clinic.addPatient(new Patient("Juliette", "Morin", LocalDate.parse("1995-11-18"), "438-555-0105", "MORJ95111801", "RAMQ"));
+                clinic.addPatient(new Patient("Alexandre", "Dubois", LocalDate.parse("1969-03-09"), "514-555-0106", "DUBA69030901", "Manulife"));
+                clinic.addPatient(new Patient("Maya", "Nguyen", LocalDate.parse("1999-07-27"), "438-555-0107", "NGUM99072701", "Blue Cross"));
+                clinic.addPatient(new Patient("Gabriel", "Fortin", LocalDate.parse("1982-12-14"), "514-555-0108", "FORG82121401", "RAMQ"));
 
                 ConsolePrinter.greeting();
 
@@ -91,7 +102,12 @@ public class AppointmentTrackingSystem {
                             }
                         }
                         case 4 -> { //make availability for professional
-
+                            try {
+                                clinicLoader.sync();
+                                makeAvailabilityFlow(clinic, availabilityController);
+                            } catch (Exception e) {
+                                ConsolePrinter.error("Error while creating availability: " + e.getMessage());
+                            }
                         }
                         case 5 -> {
                             //import from csv
@@ -146,12 +162,12 @@ public class AppointmentTrackingSystem {
         return -1;
     }
 
-    private static Date askDate(String prompt) {
+    private static LocalDate askDate(String prompt) {
         String in = ask(prompt);
         if (in.isEmpty()) return null;
         try {
-            return Date.valueOf(in);
-        } catch (IllegalArgumentException e) {
+            return LocalDate.parse(in);
+        } catch (DateTimeParseException e) {
             ConsolePrinter.error("Invalid date, expected yyyy-mm-dd.");
             return null;
         }
@@ -171,7 +187,7 @@ public class AppointmentTrackingSystem {
         if (criterion == 6) return List.of();
 
         String ramq = null, phone = null, first = null, last = null;
-        Date dob = null;
+        LocalDate dob = null;
 
         switch (criterion) {
             case 1 -> first = ask("First name: ");
@@ -243,12 +259,12 @@ public class AppointmentTrackingSystem {
         if (a < 0) return;
         Availability chosen = options.get(a);
 
-        Time start = chosen.firstFit(minutes);
-        String in = ask("Start time (hh:mm, blank = " + start.toString().substring(0, 5) + "): ");
+        LocalTime start = chosen.firstFit(minutes);
+        String in = ask("Start time (hh:mm, blank = " + start.format(DateTimeFormatter.ofPattern("HH:mm")) + "): ");
         if (!in.isEmpty()) {
             try {
-                start = Time.valueOf(in + ":00");
-            } catch (IllegalArgumentException e) {
+                start = LocalTime.parse(in, DateTimeFormatter.ofPattern("HH:mm"));
+            } catch (DateTimeParseException e) {
                 ConsolePrinter.error("Invalid time, expected hh:mm.");
                 return;
             }
@@ -290,9 +306,9 @@ public class AppointmentTrackingSystem {
 
         // optional date range filter
         DateRange range = null;
-        Date from = askDate("From date (yyyy-mm-dd, blank for any): ");
+        LocalDate from = askDate("From date (yyyy-mm-dd, blank for any): ");
         if (from != null) {
-            Date to = askDate("To date (yyyy-mm-dd, blank = same day): ");
+            LocalDate to = askDate("To date (yyyy-mm-dd, blank = same day): ");
             range = new DateRange(from, to == null ? from : to);
         }
 
@@ -305,4 +321,150 @@ public class AppointmentTrackingSystem {
             ConsolePrinter.printAvailabilities(results, minutes);
         }
     }
+
+    //case 4
+    private static void makeAvailabilityFlow(Clinic clinic, AvailabilityController controller)
+            throws java.sql.SQLException {
+        Professional professional = selectProfessional(clinic);
+        if (professional == null) return;
+
+        System.out.println("""
+                Select an availability type:
+                1. Single date
+                2. Recurring dates
+                """);
+        int type = pick("Selection (blank to cancel): ", 2);
+        if (type < 0) return;
+
+        LocalDate date = null;
+        DateRange range = null;
+        RepetitionPattern pattern = null;
+        if (type == 0) {
+            date = askDate("Date (yyyy-mm-dd): ");
+            if (date == null) return;
+        } else {
+            range = askDateRange();
+            if (range == null) return;
+            pattern = askRepetitionPattern();
+            if (pattern == null) return;
+        }
+
+        LocalTime start = askTime("Start time (HH:mm): ");
+        if (start == null) return;
+        LocalTime end = askTime("End time (HH:mm): ");
+        if (end == null) return;
+
+        if (type == 0) {
+            boolean created = controller.createSingleAvailability(professional, date, start, end);
+            System.out.println(created
+                    ? "Availability created."
+                    : "Availability was not created because it conflicts with an existing availability.");
+        } else {
+            int created = controller.createRecurringAvailability(professional, range, pattern, start, end);
+            System.out.println("Created " + created + " recurring availabilities.");
+        }
+    }
+
+
+    private static Professional selectProfessional(Clinic clinic) {
+        List<Professional> professionals = clinic.getProfessionals();
+        if (professionals.isEmpty()) {
+            ConsolePrinter.error("No professionals available.");
+            return null;
+        }
+        ConsolePrinter.printProfessionals(professionals);
+        int selection = pick("Select a professional (number, blank to cancel): ",professionals.size());
+
+        if (selection < 0) {
+            return null;
+        }
+
+        return professionals.get(selection);
+    }
+
+    private static RepetitionPattern askRepetitionPattern(){
+        System.out.println("""        
+            Select a repetition pattern:
+            1. Daily
+            2. Weekly
+            3. Monthly
+            """);
+
+        int choice = pick("Selection (blank to cancel): ", 3);
+
+        switch (choice) {
+            case 0 -> {
+                return new DailyPattern();
+            }
+
+            case 1 -> {
+                String inputDaysOfTheWeek = ask("Days of week (1=Mon, 2=Tue, ..., 7=Sun; comma-separated): ");
+                if (inputDaysOfTheWeek.isBlank()) return null;
+                Set<DayOfWeek> daysOfTheWeek = EnumSet.noneOf(DayOfWeek.class);
+                try {
+                    for (String value : inputDaysOfTheWeek.split(",")) {
+                        int dayOfTheWeek = Integer.parseInt(value.trim());
+                        if (dayOfTheWeek < 1 || dayOfTheWeek > 7) {
+                            throw new IllegalArgumentException();
+                        }
+                        daysOfTheWeek.add(DayOfWeek.of(dayOfTheWeek));
+                    }
+                } catch (IllegalArgumentException e) {
+                    ConsolePrinter.error("Invalid day selection.");
+                    return null;
+                }
+                return new WeeklyPattern(daysOfTheWeek);
+            }
+
+
+            case 2 -> {
+                String inputDaysOfTheMonth = ask("Days of month (1-31, comma-separated): ");
+                if (inputDaysOfTheMonth.isBlank()) return null;
+                Set<Integer> daysOfTheMonth = new HashSet<>();
+                try {
+                    for (String value : inputDaysOfTheMonth.split(",")) {
+                        int dayOfTheMonth = Integer.parseInt(value.trim());
+                        if (dayOfTheMonth < 1 || dayOfTheMonth > 31) {
+                            throw new IllegalArgumentException();
+                        }
+                        daysOfTheMonth.add(dayOfTheMonth);
+                    }
+                } catch (IllegalArgumentException e) {
+                    ConsolePrinter.error("Invalid day of month.");
+                    return null;
+                }
+                return new MonthlyPattern(daysOfTheMonth);
+            }
+
+            default -> {
+                return null;
+            }
+        }
+    };
+
+    private static LocalTime askTime(String prompt){
+        String input = ask(prompt);
+        if (input.isBlank()) return null;
+        try {
+            return LocalTime.parse(input, DateTimeFormatter.ofPattern("HH:mm"));
+        } catch (DateTimeParseException e) {
+            ConsolePrinter.error("Invalid time, expected HH:mm (24-hour format).");
+            return null;
+        }
+    }
+
+    private static DateRange askDateRange() {
+        LocalDate startDate = askDate("Start date (yyyy-mm-dd): ");
+        if (startDate == null) return null;
+        
+        LocalDate endDate = askDate("End date (yyyy-mm-dd): ");
+        if (endDate == null) return null;
+
+        if (endDate.isBefore(startDate)) {
+            ConsolePrinter.error("End date cannot be before start date.");
+            return null;
+        }
+        return new DateRange(startDate, endDate);
+    }
+
 }

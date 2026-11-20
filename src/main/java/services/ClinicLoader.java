@@ -75,8 +75,14 @@ public class ClinicLoader {
             String key = professional.getId() + "|" + fromDb.getDate() + "|"
                     + fromDb.getStart() + "|" + fromDb.getEnd();
             if (loaded.add(key)) {
-                professional.addAvailability(new Availability(professional, fromDb.getDate(),
-                        fromDb.getStart(), fromDb.getEnd()));
+                boolean alreadyPresent = professional.getAvailabilities().stream().anyMatch(existing ->
+                        existing.getDate().equals(fromDb.getDate())
+                                && existing.getStart().equals(fromDb.getStart())
+                                && existing.getEnd().equals(fromDb.getEnd()));
+                if (!alreadyPresent) {
+                    professional.addAvailability(new Availability(professional, fromDb.getDate(),
+                            fromDb.getStart(), fromDb.getEnd()));
+                }
             }
         }
     }

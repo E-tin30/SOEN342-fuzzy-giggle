@@ -1,6 +1,6 @@
 package controllers;
 
-import java.sql.Time;
+import java.time.LocalTime;
 import java.util.List;
 
 import domain.*;
@@ -56,7 +56,7 @@ public class AppointmentController {
     }
 
     // select availability
-    public Appointment select(Availability availability, Time start){
+    public Appointment select(Availability availability, LocalTime start){
         if(availability == null || start == null){
             throw new IllegalArgumentException("Availability and start time can't be null");
         }
