@@ -3,7 +3,9 @@ package services;
 import database.AvailabilityRow;
 import database.DatabaseGateway;
 import domain.Availability;
+import domain.DateRange;
 import domain.Professional;
+import domain.RepetitionPattern;
 import lombok.RequiredArgsConstructor;
 
 import java.sql.Date;
@@ -47,7 +49,30 @@ public class AvailabilityService {
     };
 
     public int createAvailabilities(Professional professional, Collection<LocalDate> dates, LocalTime start,LocalTime end){
-        
+
     };
+
+
+    public List<Availability> generateAvailabilities(Professional professional, DateRange range, RepetitionPattern pattern, LocalTime start, LocalTime end) {
+        if (professional == null || range == null || pattern == null || start == null || end == null || range.from() == null || range.to() == null) {
+            throw new IllegalArgumentException("Missing availability information.");
+        }
+
+        if (!end.isAfter(start)) {
+            throw new IllegalArgumentException("End time must be after start time.");
+        }
+
+        LocalDate from = new Date(range.from().getTime()).toLocalDate();
+        LocalDate to = new Date(range.to().getTime()).toLocalDate();
+
+        List<Availability> availabilities = new ArrayList<>();
+
+        for (LocalDate date : pattern.generateDates(from, to)) {
+            Availability availability = new Availability(professional, Date.valueOf(date), Time.valueOf(start),Time.valueOf(end));
+            availabilities.add(availability);
+        }
+
+        return availabilities;
+    }
 
 }

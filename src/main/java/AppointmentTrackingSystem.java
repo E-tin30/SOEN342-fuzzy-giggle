@@ -416,4 +416,19 @@ public class AppointmentTrackingSystem {
             return null;
         }
     }
+
+    private static DateRange askDateRange() {
+        Date startDate = askDate("Start date (yyyy-mm-dd): ");
+        if (startDate == null) return null;
+        
+        Date endDate = askDate("End date (yyyy-mm-dd): ");
+        if (endDate == null) return null;
+
+        if (endDate.before(startDate)) {
+            ConsolePrinter.error("End date cannot be before start date.");
+            return null;
+        }
+        return new DateRange(startDate, endDate);
+    }
+
 }
