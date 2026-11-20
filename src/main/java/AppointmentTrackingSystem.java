@@ -10,7 +10,10 @@ import domain.Clinic;
 import domain.DateRange;
 import domain.Patient;
 import domain.PatientSearchSpecification;
+import domain.Professional;
 import domain.Referral;
+import domain.RepetitionFrequency;
+import domain.RepetitionPattern;
 import domain.Service;
 import services.AvailabilityService;
 import services.CSVService;
@@ -21,8 +24,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Date;
 import java.sql.Time;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
+import java.util.Set;
 
 //main class of the application
 public class AppointmentTrackingSystem {
@@ -91,6 +101,10 @@ public class AppointmentTrackingSystem {
                             }
                         }
                         case 4 -> { //make availability for professional
+                            clinicLoader.sync();
+                            String enteredProfessionalName = ask("Enter professional name: ");
+
+                            makeAvailabilityFlow();
 
                         }
                         case 5 -> {
@@ -311,15 +325,92 @@ public class AppointmentTrackingSystem {
 
     };
 
-    private static Professional selectProfessional(Clinic clinic){
 
-    };
+    private static Professional selectProfessional(Clinic clinic) {
+        List<Professional> professionals = clinic.getProfessionals();
+        if (professionals.isEmpty()) {
+            ConsolePrinter.error("No professionals available.");
+            return null;
+        }
+        ConsolePrinter.printProfessionals(professionals);
+        int selection = pick("Select a professional (number, blank to cancel): ",professionals.size());
+
+        if (selection < 0) {
+            return null;
+        }
+
+        return professionals.get(selection);
+    }
 
     private static RepetitionPattern askRepetitionPattern(){
-        
+        System.out.println("""        
+            Select a repetition pattern:
+            1. Daily
+            2. Weekly
+            3. Monthly
+            """);
+
+        int choice = pick("Selection (blank to cancel): ", 3);
+
+        switch (choice) {
+            case 0 -> {
+                return new RepetitionPattern(RepetitionFrequency.DAILY, Set.of(), null);
+            }
+
+            case 1 -> {
+                String inputDaysOfTheWeek = ask("Days of week (1=Mon, 2=Tue, ..., 7=Sun; comma-separated): ");
+                if (inputDaysOfTheWeek.isBlank()) return null;
+                Set<DayOfWeek> daysOfTheWeek = EnumSet.noneOf(DayOfWeek.class);
+                try {
+                    for (String value : inputDaysOfTheWeek.split(",")) {
+                        int dayOfTheWeek = Integer.parseInt(value.trim());
+                        if (dayOfTheWeek < 1 || dayOfTheWeek > 7) {
+                            throw new IllegalArgumentException();
+                        }
+                        daysOfTheWeek.add(DayOfWeek.of(dayOfTheWeek));
+                    }
+                } catch (IllegalArgumentException e) {
+                    ConsolePrinter.error("Invalid day selection.");
+                    return null;
+                }
+                return new RepetitionPattern(RepetitionFrequency.WEEKLY, days, null);
+            }
+
+
+            case 2 -> {
+                String inputDaysOfTheMonth = ask("Days of month (1-31, comma-separated): ");
+                if (inputDaysOfTheMonth.isBlank()) return null;
+                Set<Integer> daysOfTheMonth = new HashSet<>();
+                try {
+                    for (String value : inputDaysOfTheMonth.split(",")) {
+                        int dayOfTheMonth = Integer.parseInt(value.trim());
+                        if (dayOfTheMonth < 1 || dayOfTheMonth > 31) {
+                            throw new IllegalArgumentException();
+                        }
+                        daysOfTheMonth.add(dayOfTheMonth);
+                    }
+                } catch (IllegalArgumentException e) {
+                    ConsolePrinter.error("Invalid day of month.");
+                    return null;
+                }
+                return new RepetitionPattern(RepetitionFrequency.MONTHLY, Set.of(), days);
+            }
+
+            default -> {
+                return null;
+            }
+        }
     };
 
-    private static LocalTime askTime(String prompt){
-
-    };
+    private static Time askTime(String prompt){
+        String input = ask(prompt);
+        if (input.isBlank()) return null;
+        try {
+            LocalTime time = LocalTime.parse(input,DateTimeFormatter.ofPattern("HH:mm"));
+            return Time.valueOf(time);
+        } catch (DateTimeParseException e) {
+            ConsolePrinter.error("Invalid time, expected HH:mm (24-hour format).");
+            return null;
+        }
+    }
 }
