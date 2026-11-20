@@ -75,4 +75,30 @@ public class AvailabilityService {
         return availabilities;
     }
 
+
+    public List<Availability> filterConflictingAvailabilities(Professional professional, List<Availability> generated) {
+        List<Availability> valid = new ArrayList<>();
+
+        //Include existing availabilities when checking conflicts
+        List<Availability> occupied = new ArrayList<>(professional.getAvailabilities());
+
+        for (Availability candidate : generated) {
+            boolean conflict = false;
+
+            for (Availability existing : occupied) {
+                if (candidate.overlaps(existing)) {
+                    conflict = true;
+                    break;
+                }
+            }
+
+            if (!conflict) {
+                valid.add(candidate);
+                occupied.add(candidate);
+            }
+        }
+        return valid;
+    }
+
+
 }

@@ -68,4 +68,23 @@ public class Availability {
         appointments.add(appointment);
         return appointment;
     }
+
+
+    public boolean overlaps(Availability other) {
+        if (other == null) return false;
+
+        //Different professionals are allowed to have conflicting availabilities
+        if (this.professional.getId() != other.getProfessional().getId()) {
+            return false;
+        }
+
+        //Different dates cannot overlap
+        if (!this.date.equals(other.getDate())) {
+            return false;
+        }
+
+        //Check if the time intervals overlap
+        return this.start.before(other.getEnd()) && this.end.after(other.getStart());
+    }
+
 }
