@@ -15,6 +15,9 @@ import domain.Referral;
 import domain.RepetitionFrequency;
 import domain.RepetitionPattern;
 import domain.Service;
+import domain.MonthlyPattern;
+import domain.WeeklyPattern;
+import domain.DailyPattern;
 import services.AvailabilityService;
 import services.CSVService;
 import services.ClinicLoader;
@@ -354,7 +357,7 @@ public class AppointmentTrackingSystem {
 
         switch (choice) {
             case 0 -> {
-                return new RepetitionPattern(RepetitionFrequency.DAILY, Set.of(), null);
+                return new DailyPattern();
             }
 
             case 1 -> {
@@ -373,7 +376,7 @@ public class AppointmentTrackingSystem {
                     ConsolePrinter.error("Invalid day selection.");
                     return null;
                 }
-                return new RepetitionPattern(RepetitionFrequency.WEEKLY, days, null);
+                return new WeeklyPattern(daysOfTheWeek);
             }
 
 
@@ -393,7 +396,7 @@ public class AppointmentTrackingSystem {
                     ConsolePrinter.error("Invalid day of month.");
                     return null;
                 }
-                return new RepetitionPattern(RepetitionFrequency.MONTHLY, Set.of(), days);
+                return new MonthlyPattern(daysOfTheMonth);
             }
 
             default -> {
