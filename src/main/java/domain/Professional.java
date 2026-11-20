@@ -54,6 +54,20 @@ public class Professional {
     }
 
     public boolean hasOverlappingAvailability(LocalDate date, LocalTime start, LocalTime end){
+        if (date == null || start == null || end == null) {
+            throw new IllegalArgumentException("Availability date and times cannot be null.");
+        }
+        if (!end.isAfter(start)) {
+            throw new IllegalArgumentException("End time must be after start time.");
+        }
 
+        for (Availability availability : availabilities) {
+            if (date.equals(availability.getDate())
+                    && start.isBefore(availability.getEnd())
+                    && end.isAfter(availability.getStart())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

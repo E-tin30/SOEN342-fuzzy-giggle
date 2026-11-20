@@ -1,6 +1,7 @@
 package domain;
 
-import java.util.Date;
+import java.time.LocalDate;
 
-public record PatientSearchSpecification(String ramq, Date dateOfBirth,
-                                         String phoneNumber, String firstName, String lastName) {}
+public record PatientSearchSpecification(String ramq, LocalDate dateOfBirth, String phoneNumber, String firstName, String lastName) {
+    
+}

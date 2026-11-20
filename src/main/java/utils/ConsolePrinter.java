@@ -6,10 +6,13 @@ import domain.Patient;
 import domain.Professional;
 import domain.Service;
 
-import java.sql.Time;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public class ConsolePrinter {
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     public static void greeting() {
         System.out.println("""
@@ -59,12 +62,12 @@ public class ConsolePrinter {
 
     // printing helpers
 
-    private static String hm(Time time) {
-        return time.toString().substring(0, 5);
+    private static String hm(LocalTime time) {
+        return time.format(TIME_FORMAT);
     }
 
-    private static String day(java.util.Date date) {
-        return new java.sql.Date(date.getTime()).toString();
+    private static String day(LocalDate date) {
+        return date.toString();
     }
 
     private static String name(Professional p) {
