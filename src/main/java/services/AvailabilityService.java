@@ -42,14 +42,14 @@ public class AvailabilityService {
         return availabilities;
     }
 
-    public boolean createAvailability(Professional professional, LocalDate date, LocalTime start, LocalTime end) throws SQLException {
+    public boolean createAvailability(Professional professional, LocalDate date, LocalTime start, LocalTime end, boolean isBooked) throws SQLException {
         if (date == null) {
             throw new IllegalArgumentException("Availability date cannot be null.");
         }
-        return createAvailabilities(professional, List.of(date), start, end) == 1;
+        return createAvailabilities(professional, List.of(date), start, end, isBooked) == 1;
     }
 
-    public int createAvailabilities(Professional professional, Collection<LocalDate> dates, LocalTime start, LocalTime end) throws SQLException {
+    public int createAvailabilities(Professional professional, Collection<LocalDate> dates, LocalTime start, LocalTime end, boolean isBooked) throws SQLException {
         validateAvailabilityInput(professional, dates, start, end);
 
         List<Availability> generated = new ArrayList<>();
@@ -57,13 +57,16 @@ public class AvailabilityService {
             if (date == null) {
                 throw new IllegalArgumentException("Availability date cannot be null.");
             }
-            generated.add(new Availability(professional, date, start, end));
+            generated.add(new Availability(professional, date, start, end, isBooked));
         }
 
         List<Availability> valid = filterConflictingAvailabilities(professional, generated);
         return saveAvailabilities(valid);
     }
 
+    public boolean removeAvailability(Availability availability) throws SQLException {
+        return db.removeAvailability(availability);
+    }
 
     public List<Availability> generateAvailabilities(Professional professional, DateRange range, RepetitionPattern pattern, LocalTime start, LocalTime end) {
         if (professional == null || range == null || pattern == null || start == null || end == null) {
@@ -136,7 +139,7 @@ public class AvailabilityService {
                         professional.getTitle(), professional.getSpecialization());
 
                 if (db.addAvailability(professionalId, availability.getDate(),
-                        availability.getStart(), availability.getEnd())) {
+                        availability.getStart(), availability.getEnd(), false)) {
                     saved.add(availability);
                 }
             }

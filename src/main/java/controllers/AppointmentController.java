@@ -1,10 +1,15 @@
 package controllers;
 
+import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import domain.*;
 import lombok.RequiredArgsConstructor;
+import services.AvailabilityService;
+import utils.ConsolePrinter;
 
 @RequiredArgsConstructor
 public class AppointmentController {
@@ -13,6 +18,7 @@ public class AppointmentController {
     private Patient currentPatient;
     private Service currentService;
     private Referral currentReferral;
+    private final AvailabilityService availabilityService;
 
     // forward to clinic
     public List<Patient> findPatient(PatientSearchSpecification spec){
@@ -76,6 +82,8 @@ public class AppointmentController {
             return null; // that time no longer fits
         }
 
+        updateAvailabilityAfterCreateAppointment(availability, start, start.plusMinutes(currentService.getDurationMinutes()));
+
         this.currentPatient.addAppointment(appointment);
         this.clinic.addAppointment(appointment);
         this.activityLog.record(currentPatient, appointment);
@@ -85,5 +93,20 @@ public class AppointmentController {
         this.currentReferral = null;
 
         return appointment;
+    }
+
+    private void updateAvailabilityAfterCreateAppointment(Availability availability, LocalTime appointmentStart, LocalTime appointmentEnd) {
+        try{
+            availabilityService.removeAvailability(availability);
+            availabilityService.createAvailability(availability.getProfessional(), availability.getDate(), appointmentStart, appointmentEnd, true);
+            if(!appointmentStart.equals(availability.getStart())){
+                availabilityService.createAvailability(availability.getProfessional(), availability.getDate(), availability.getStart(), appointmentStart, false);
+            }
+            if(!appointmentEnd.equals(availability.getEnd())){
+                availabilityService.createAvailability(availability.getProfessional(), availability.getDate(), appointmentEnd, availability.getEnd(), false);
+            }
+        } catch (SQLException e) {
+            ConsolePrinter.error("Issue with updating availabilities: " + e.getMessage());
+        }
     }
 }
