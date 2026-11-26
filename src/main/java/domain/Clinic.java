@@ -15,6 +15,7 @@ public class Clinic {
     private final List<Professional> professionals = new ArrayList<>();
     private final List<Patient> patients = new ArrayList<>();
     private final List<Appointment> appointments = new ArrayList<>();
+    private final List<Resource> resources = new ArrayList<>();
 
     // add patient to clinic
     public void addPatient(Patient patient){
@@ -100,5 +101,13 @@ public class Clinic {
             throw new IllegalArgumentException("Service can't be null");
         }
         return this.offeredServices.contains(service);
+    }
+    
+    // add resource to clinic
+    public void addResource(Resource resource){
+        if(resource == null){
+            throw new IllegalArgumentException("Resource can't be null");
+        }
+        this.resources.add(resource);
     }
 }

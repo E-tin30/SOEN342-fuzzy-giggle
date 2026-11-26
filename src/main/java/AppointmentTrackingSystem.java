@@ -1,7 +1,11 @@
 import controllers.AppointmentController;
 import controllers.AvailabilityController;
+import controllers.PatientController;
+import controllers.ProfessionalController;
 import controllers.ReferralRequiredException;
+import controllers.ResourceController;
 import controllers.ServiceNotOfferedException;
+import controllers.WaitlistController;
 import database.DatabaseGateway;
 import domain.ActivityLog;
 import domain.Appointment;
@@ -13,13 +17,22 @@ import domain.PatientSearchSpecification;
 import domain.Professional;
 import domain.Referral;
 import domain.RepetitionPattern;
+import domain.Resource;
+import domain.ResourceType;
 import domain.Service;
+import domain.WaitlistEntry;
 import domain.MonthlyPattern;
 import domain.WeeklyPattern;
 import domain.DailyPattern;
 import services.AvailabilityService;
 import services.CSVService;
 import services.ClinicLoader;
+import services.PatientService;
+import services.ProfessionalService;
+import services.ResourceService;
+import services.SeedService;
+import services.ServiceCatalogService;
+import services.WaitlistService;
 import utils.ConsolePrinter;
 
 import java.nio.file.Files;
@@ -29,6 +42,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -47,27 +61,33 @@ public class AppointmentTrackingSystem {
 
             try (DatabaseGateway db = new DatabaseGateway("jdbc:sqlite:data/app.db")) {
                 //updated: no longer clearing database on start
-//                db.clearAll();
+                //db.clearAll();
 
-                //domain
                 Clinic clinic = new Clinic("Clinic", "Montreal");
                 ActivityLog activityLog = new ActivityLog();
 
-                //services
                 CSVService csvService = new CSVService(db);
                 AvailabilityService availabilityService = new AvailabilityService(db);
                 AvailabilityController availabilityController = new AvailabilityController(clinic, availabilityService);
                 AppointmentController appointmentController = new AppointmentController(clinic, activityLog, availabilityService);
-                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService);
+                ProfessionalService professionalService = new ProfessionalService(db);
+                ServiceCatalogService serviceCatalogService = new ServiceCatalogService(db);
+                ProfessionalController professionalController = new ProfessionalController(professionalService, serviceCatalogService);
+                ResourceService resourceService = new ResourceService(db);
+                ResourceController resourceController = new ResourceController(resourceService);
+                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService, resourceService);
+                PatientService patientService = new PatientService(db);
+                PatientController patientController = new PatientController(clinic, patientService);
+                SeedService seedService = new SeedService(db, patientService, csvService, serviceCatalogService, resourceService);
+                WaitlistService waitlistService = new WaitlistService(db);
+                WaitlistController waitlistController = new WaitlistController(clinic, waitlistService);
+                seedService.seedIfEmpty();
 
-                clinic.addPatient(new Patient("Émilie", "Lavoie", LocalDate.parse("1990-04-12"), "514-555-0101", "LAVE90041201", "RAMQ"));
-                clinic.addPatient(new Patient("Olivier", "Côté", LocalDate.parse("1985-09-30"), "514-555-0102", "COTO85093001", "RAMQ"));
-                clinic.addPatient(new Patient("Fatima", "Benali", LocalDate.parse("1978-01-22"), "438-555-0103", "BENF78012201", "RAMQ"));
-                clinic.addPatient(new Patient("Thomas", "Girard", LocalDate.parse("2001-06-05"), "514-555-0104", "GIRT01060501", "RAMQ"));
-                clinic.addPatient(new Patient("Juliette", "Morin", LocalDate.parse("1995-11-18"), "438-555-0105", "MORJ95111801", "RAMQ"));
-                clinic.addPatient(new Patient("Alexandre", "Dubois", LocalDate.parse("1969-03-09"), "514-555-0106", "DUBA69030901", "Manulife"));
-                clinic.addPatient(new Patient("Maya", "Nguyen", LocalDate.parse("1999-07-27"), "438-555-0107", "NGUM99072701", "Blue Cross"));
-                clinic.addPatient(new Patient("Gabriel", "Fortin", LocalDate.parse("1982-12-14"), "514-555-0108", "FORG82121401", "RAMQ"));
+                for (Patient p : patientService.getAllPatients()) {
+                    clinic.addPatient(p);
+                }
+
+                clinicLoader.sync();
 
                 ConsolePrinter.greeting();
 
@@ -88,7 +108,7 @@ public class AppointmentTrackingSystem {
                         case 2 -> { //Book appointment
                             try {
                                 clinicLoader.sync();
-                                bookAppointmentFlow(clinic, appointmentController);
+                                bookAppointmentFlow(clinic, appointmentController, waitlistController, null);
                             } catch (Exception e) {
                                 ConsolePrinter.error("Error while trying to book: " + e.getMessage());
                             }
@@ -129,7 +149,11 @@ public class AppointmentTrackingSystem {
                                 ConsolePrinter.error("Unable to export availabilities to CSV.");
                             }
                         }
-                        case 7 -> { //exit
+                        case 7 -> registerPatientFlow(patientController); // register patient
+                        case 8 -> registerProfessionalFlow(clinic, professionalController, clinicLoader); // register professional
+                        case 9 -> addResourceFlow(resourceController, clinicLoader); // add resource
+                        case 10 -> waitlistMenuFlow(clinic, appointmentController, waitlistController, clinicLoader);
+                        case 11 -> { //exit
                             scanner.close();
                             ConsolePrinter.goodbye();
                             System.exit(0);
@@ -217,19 +241,23 @@ public class AppointmentTrackingSystem {
 
     // case 2
 
-    private static void bookAppointmentFlow(Clinic clinic, AppointmentController controller) {
+    private static boolean bookAppointmentFlow(Clinic clinic, AppointmentController controller, WaitlistController waitlistController, Patient preselected) {
         // 1. find and select the patient
-        List<Patient> patients = searchPatientFlow(controller);
-        if (patients.isEmpty()) return;
-        int p = pick("Pick the patient (number, blank to cancel): ", patients.size());
-        if (p < 0) return;
-        controller.selectPatient(patients.get(p));
+        Patient patient = preselected;
+        if (patient == null) {
+            List<Patient> patients = searchPatientFlow(controller);
+            if (patients.isEmpty()) return false;
+            int p = pick("Pick the patient (number, blank to cancel): ", patients.size());
+            if (p < 0) return false;
+            patient = patients.get(p);
+        }
+        controller.selectPatient(patient);
 
         // 2. choose the service
         List<Service> services = clinic.getOfferedServices();
         ConsolePrinter.printServices(services);
         int s = pick("Pick the service (number, blank to cancel): ", services.size());
-        if (s < 0) return;
+        if (s < 0) return false;
         Service service = services.get(s);
 
         int minutes = service.getDurationMinutes();
@@ -240,23 +268,27 @@ public class AppointmentTrackingSystem {
             options = controller.requestNewAppointment(service);
         } catch (ServiceNotOfferedException e) {
             ConsolePrinter.error("This clinic does not offer that service.");
-            return;
+            return false;
         } catch (ReferralRequiredException e) {
             System.out.println("\nThis service requires a referral.");
             Referral referral = askReferral(service);
-            if (referral == null) return;
+            if (referral == null) return false;
             options = controller.provideReferral(referral);
         }
 
         if (options.isEmpty()) {
             ConsolePrinter.error("No availability for that service.");
-            return;
+            if (preselected == null
+                    && ask("Add this patient to the waitlist? (y/n): ").equalsIgnoreCase("y")) {
+                addToWaitlistFlow(clinic, controller, waitlistController, patient);
+            }
+            return false;
         }
 
         // 4. choose a slot
         ConsolePrinter.printAvailabilities(options, minutes);
         int a = pick("Pick an availability (number, blank to cancel): ", options.size());
-        if (a < 0) return;
+        if (a < 0) return false;
         Availability chosen = options.get(a);
 
         LocalTime start = chosen.firstFit(minutes);
@@ -266,16 +298,17 @@ public class AppointmentTrackingSystem {
                 start = LocalTime.parse(in, DateTimeFormatter.ofPattern("HH:mm"));
             } catch (DateTimeParseException e) {
                 ConsolePrinter.error("Invalid time, expected hh:mm.");
-                return;
+                return false;
             }
         }
 
         Appointment appointment = controller.select(chosen, start);
         if (appointment == null) {
             ConsolePrinter.error("That time doesn't work: a " + minutes + "-minute appointment must start and end inside the availability and not overlap an appointment that is already booked.");
-            return;
+            return false;
         }
         ConsolePrinter.printAppointment(appointment);
+        return true;
     }
 
     private static Referral askReferral(Service service) {
@@ -440,7 +473,7 @@ public class AppointmentTrackingSystem {
                 return null;
             }
         }
-    };
+    }
 
     private static LocalTime askTime(String prompt){
         String input = ask(prompt);
@@ -465,6 +498,284 @@ public class AppointmentTrackingSystem {
             return null;
         }
         return new DateRange(startDate, endDate);
+    }
+
+    private static void registerPatientFlow(PatientController controller) {
+        String first = ask("First name (blank to cancel): ");
+        if (first.isEmpty()) return;
+        String last = ask("Last name: ");
+        LocalDate dob = askDate("Date of birth (yyyy-mm-dd): ");
+        if (dob == null) return;
+        String phone = ask("Phone number: ");
+        String ramq = ask("Insurance (RAMQ) number: ");
+        String insurance = ask("Insurance provider: ");
+
+        if (last.isEmpty() || phone.isEmpty() || ramq.isEmpty() || insurance.isEmpty()) {
+            ConsolePrinter.error("All fields are required.");
+            return;
+        }
+
+        try {
+            boolean registered = controller.registerPatient(first, last, dob, phone, ramq, insurance);
+            System.out.println(registered
+                    ? "Patient registered."
+                    : "A patient with this RAMQ number is already registered.");
+        } catch (java.sql.SQLException e) {
+            ConsolePrinter.error("Could not register the patient: " + e.getMessage());
+        }
+        
+    }
+
+    // case 8
+    private static void registerProfessionalFlow(Clinic clinic, ProfessionalController controller, ClinicLoader clinicLoader) {
+        String first = ask("First name (blank to cancel): ");
+        if (first.isEmpty()) return;
+        String last = ask("Last name: ");
+        String title = ask("Title (e.g. Dr.): ");
+        String specialization = ask("Specialization: ");
+
+        try {
+            List<String> serviceNames = new ArrayList<>();
+
+            // pick from the existing services
+            List<Service> services = clinic.getOfferedServices();
+            ConsolePrinter.printServices(services);
+            String input = ask("Services offered (numbers separated by commas, blank = default for this specialization): ");
+            if (!input.isEmpty()) {
+                for (String value : input.split(",")) {
+                    int number = Integer.parseInt(value.trim());
+                    if (number < 1 || number > services.size()) {
+                        throw new NumberFormatException();
+                    }
+                    serviceNames.add(services.get(number - 1).getName());
+                }
+            }
+
+            // or create new ones
+            while (ask("Create a new service for this professional? (y/n): ").equalsIgnoreCase("y")) {
+                String name = ask("Service name: ");
+                int minutes = Integer.parseInt(ask("Duration in minutes: "));
+                boolean referral = ask("Requires a referral? (y/n): ").equalsIgnoreCase("y");
+
+                List<Resource> resources = clinic.getResources();
+                List<String> resourceNames = new ArrayList<>();
+                if (!resources.isEmpty()) {
+                    for (int i = 0; i < resources.size(); i++) {
+                        System.out.println((i + 1) + ". " + resources.get(i).getName() + " (" + resources.get(i).getType() + ")");
+                    }
+                    String resourceInput = ask("Resources this service needs (numbers separated by commas, blank for none): ");
+                    if (!resourceInput.isEmpty()) {
+                        for (String value : resourceInput.split(",")) {
+                            int number = Integer.parseInt(value.trim());
+                            if (number < 1 || number > resources.size()) {
+                                throw new NumberFormatException();
+                            }
+                            resourceNames.add(resources.get(number - 1).getName());
+                        }
+                    }
+                }
+
+                if (controller.addService(name, specialization, referral, minutes, resourceNames)) {
+                    serviceNames.add(name);
+                } else {
+                    System.out.println("A service with that name already exists. Pick it from the list instead.");
+                }
+            }
+
+            boolean registered = controller.registerProfessional(first, last, title, specialization, serviceNames);
+            if (registered) {
+                clinicLoader.sync();
+                System.out.println("Professional registered.");
+            } else {
+                System.out.println("This professional is already registered.");
+            }
+        } catch (NumberFormatException e) {
+            ConsolePrinter.error("Invalid number.");
+        } catch (IllegalArgumentException e) {
+            ConsolePrinter.error(e.getMessage());
+        } catch (java.sql.SQLException e) {
+            ConsolePrinter.error("Could not register the professional: " + e.getMessage());
+        }
+    }
+
+    // case 9
+    private static void addResourceFlow(ResourceController controller, ClinicLoader clinicLoader) {
+        String name = ask("Resource name (blank to cancel): ");
+        if (name.isEmpty()) return;
+
+        System.out.println("""
+                Select a resource type:
+                1. Room
+                2. Equipment
+                3. Role (e.g. nurse, assistant)
+                """);
+        int type = pick("Selection (blank to cancel): ", 3);
+        if (type < 0) return;
+        ResourceType resourceType = ResourceType.values()[type];
+
+        try {
+            boolean added = controller.addResource(name, resourceType);
+            if (added) {
+                clinicLoader.sync();
+                System.out.println("Resource added.");
+            } else {
+                System.out.println("A resource with this name already exists.");
+            }
+        } catch (IllegalArgumentException e) {
+            ConsolePrinter.error(e.getMessage());
+        } catch (java.sql.SQLException e) {
+            ConsolePrinter.error("Could not add the resource: " + e.getMessage());
+        }
+    }
+
+    // case 10
+    private static void waitlistMenuFlow(Clinic clinic, AppointmentController searchController,
+                                        WaitlistController controller, ClinicLoader clinicLoader) {
+        try {
+            clinicLoader.sync();
+            System.out.println("""
+                    Waitlist:
+                    1. Add a patient to the waitlist
+                    2. View the waitlist
+                    3. Change a priority
+                    4. Remove a patient from the waitlist
+                    5. Find waitlisted patients for an opening
+                    """);
+            int choice = pick("Selection (blank to cancel): ", 5);
+            switch (choice) {
+                case 0 -> addToWaitlistFlow(clinic, searchController, controller, null);
+                case 1 -> ConsolePrinter.printWaitlist(controller.viewWaitlist());
+                case 2 -> changePriorityFlow(controller);
+                case 3 -> removeFromWaitlistFlow(controller);
+                case 4 -> offerOpeningFlow(clinic, searchController, controller);
+                default -> { }
+            }
+        } catch (Exception e) {
+            ConsolePrinter.error("Error with the waitlist: " + e.getMessage());
+        }
+    }
+
+    // the patient is already chosen when this comes from booking, otherwise it is searched
+    private static void addToWaitlistFlow(Clinic clinic, AppointmentController searchController,
+                                        WaitlistController controller, Patient preselected) {
+        try {
+            Patient patient = preselected;
+            if (patient == null) {
+                List<Patient> patients = searchPatientFlow(searchController);
+                if (patients.isEmpty()) return;
+                int p = pick("Pick the patient (number, blank to cancel): ", patients.size());
+                if (p < 0) return;
+                patient = patients.get(p);
+            }
+
+            Professional professional = null;
+            List<Professional> professionals = clinic.getProfessionals();
+            ConsolePrinter.printProfessionals(professionals);
+            int pr = pick("Waiting for a specific professional (number, blank for any): ", professionals.size());
+            if (pr >= 0) professional = professionals.get(pr);
+
+            String specialization = null;
+            if (professional == null) {
+                specialization = ask("Specialization (blank to cancel): ");
+                if (specialization.isEmpty()) return;
+            }
+
+            DateRange range = null;
+            LocalDate from = askDate("From date (yyyy-mm-dd, blank for any): ");
+            if (from != null) {
+                LocalDate to = askDate("To date (yyyy-mm-dd, blank = same day): ");
+                range = new DateRange(from, to == null ? from : to);
+            }
+
+            int priority = askPriority("Priority 1 (highest) to 5 (lowest), blank = 3: ", 3);
+            if (priority < 0) return;
+
+            controller.addToWaitlist(patient, professional, specialization, range, priority);
+            System.out.println("Added to the waitlist.");
+        } catch (IllegalArgumentException e) {
+            ConsolePrinter.error(e.getMessage());
+        } catch (java.sql.SQLException e) {
+            ConsolePrinter.error("Could not add to the waitlist: " + e.getMessage());
+        }
+    }
+
+    private static void changePriorityFlow(WaitlistController controller) throws java.sql.SQLException {
+        List<WaitlistEntry> entries = controller.viewWaitlist();
+        ConsolePrinter.printWaitlist(entries);
+        if (entries.isEmpty()) return;
+        int e = pick("Pick an entry (number, blank to cancel): ", entries.size());
+        if (e < 0) return;
+        int priority = askPriority("New priority 1 (highest) to 5 (lowest): ", -1);
+        if (priority < 0) return;
+        controller.changePriority(entries.get(e), priority);
+        System.out.println("Priority updated.");
+    }
+
+    private static void removeFromWaitlistFlow(WaitlistController controller) throws java.sql.SQLException {
+        List<WaitlistEntry> entries = controller.viewWaitlist();
+        ConsolePrinter.printWaitlist(entries);
+        if (entries.isEmpty()) return;
+        int e = pick("Pick an entry to remove (number, blank to cancel): ", entries.size());
+        if (e < 0) return;
+        if (!ask("Remove this patient from the waitlist? (y/n): ").equalsIgnoreCase("y")) return;
+        controller.removeFromWaitlist(entries.get(e));
+        System.out.println("Removed from the waitlist.");
+    }
+
+    // returns the priority (1 to 5), the default when blank, or -1 when invalid
+    private static int askPriority(String prompt, int defaultValue) {
+        String in = ask(prompt);
+        if (in.isEmpty()) return defaultValue;
+        try {
+            int n = Integer.parseInt(in);
+            if (n >= 1 && n <= 5) return n;
+        } catch (NumberFormatException ignored) { }
+        ConsolePrinter.error("Priority must be a number from 1 to 5.");
+        return -1;
+    }
+
+    // an opening appeared: find who is waiting for it, offer it by phone, book if accepted
+    private static void offerOpeningFlow(Clinic clinic, AppointmentController appointmentController, WaitlistController controller) throws java.sql.SQLException {
+        Professional professional = selectProfessional(clinic);
+        if (professional == null) return;
+        LocalDate date = askDate("Date of the opening (yyyy-mm-dd): ");
+        if (date == null) return;
+
+        List<WaitlistEntry> eligible = controller.findEligible(professional, date);
+        if (eligible.isEmpty()) {
+            System.out.println("\nNo one on the waitlist matches this opening.\n");
+            return;
+        }
+        System.out.println("\nWaitlisted patients who match (highest priority first):");
+        ConsolePrinter.printWaitlist(eligible);
+        int e = pick("Offer the opening to (number, blank to cancel): ", eligible.size());
+        if (e < 0) return;
+        WaitlistEntry entry = eligible.get(e);
+
+        controller.markOffered(entry);
+        System.out.println("Call " + entry.getPatient().getFirstName() + " " + entry.getPatient().getLastName()
+                + " at " + entry.getPatient().getPhoneNumber() + " to offer the opening.");
+
+        if (!ask("Did the patient accept? (y/n): ").equalsIgnoreCase("y")) {
+            controller.declineOffer(entry);
+            System.out.println("Offer declined. The patient stays on the waitlist.");
+            return;
+        }
+
+        boolean booked;
+        try {
+            booked = bookAppointmentFlow(clinic, appointmentController, controller, entry.getPatient());
+        } catch (RuntimeException ex) {
+            controller.declineOffer(entry);
+            throw ex;
+        }
+        if (booked) {
+            controller.markBooked(entry);
+            System.out.println("Waitlist entry completed.");
+        } else {
+            controller.declineOffer(entry);
+            System.out.println("No appointment was booked. The patient stays on the waitlist.");
+        }
     }
 
 }

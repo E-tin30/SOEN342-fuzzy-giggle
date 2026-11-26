@@ -4,12 +4,15 @@ import domain.Appointment;
 import domain.Availability;
 import domain.Patient;
 import domain.Professional;
+import domain.Resource;
 import domain.Service;
+import domain.WaitlistEntry;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ConsolePrinter {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
@@ -41,7 +44,11 @@ public class ConsolePrinter {
                 4. Make availability for a professional
                 5. Import availabilities from CSV
                 6. Export availabilities from CSV
-                7. Exit
+                7. Register a patient
+                8. Register a professional
+                9. Add a resource
+                10. Manage the waitlist
+                11. Exit
                 Enter the number of the option you want and press enter: 
                 """);
     }
@@ -97,9 +104,12 @@ public class ConsolePrinter {
         System.out.println();
         for (int i = 0; i < services.size(); i++) {
             Service s = services.get(i);
+            String needs = s.getRequiredResources().isEmpty() ? ""
+                    : " [needs: " + s.getRequiredResources().stream().map(Resource::getName).collect(Collectors.joining(", ")) + "]";
             System.out.println((i + 1) + ". " + s.getName()
                     + " - " + s.getDurationMinutes() + " min"
-                    + (s.requiresReferral() ? " (referral required)" : ""));
+                    + (s.requiresReferral() ? " (referral required)" : "")
+                    + needs);
         }
         System.out.println();
     }
@@ -139,6 +149,30 @@ public class ConsolePrinter {
         System.out.println("  Clinic:       " + a.getClinic().getName() + ", " + a.getClinic().getLocation());
         if (a.getReferral() != null) {
             System.out.println("  Referral:     " + a.getReferral().getReferringPhysician());
+        }
+        System.out.println();
+    }
+
+    public static void printWaitlist(List<WaitlistEntry> entries) {
+        if (entries.isEmpty()) {
+            System.out.println("\nThe waitlist is empty.\n");
+            return;
+        }
+        System.out.println();
+        for (int i = 0; i < entries.size(); i++) {
+            WaitlistEntry w = entries.get(i);
+            String target = w.getProfessional() != null
+                    ? name(w.getProfessional())
+                    : w.getSpecialization() + " (any professional)";
+            String dates = w.getDateRange() == null
+                    ? "any date"
+                    : day(w.getDateRange().from()) + " to " + day(w.getDateRange().to());
+            System.out.println((i + 1) + ". [priority " + w.getPriority() + "] "
+                    + w.getPatient().getFirstName() + " " + w.getPatient().getLastName()
+                    + " | " + w.getPatient().getPhoneNumber()
+                    + " | " + target
+                    + " | " + dates
+                    + " | " + w.getStatus());
         }
         System.out.println();
     }
