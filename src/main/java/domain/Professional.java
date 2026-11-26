@@ -2,6 +2,7 @@ package domain;
 
 import java.util.ArrayList;
 import java.util.List;
+
 import java.time.*;
 
 import lombok.AllArgsConstructor;
@@ -69,5 +70,9 @@ public class Professional {
             }
         }
         return false;
+    }
+
+    public void removeAvailability(Availability availability){
+        this.availabilities.remove(availability);
     }
 }

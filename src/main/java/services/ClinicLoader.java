@@ -81,7 +81,7 @@ public class ClinicLoader {
                                 && existing.getEnd().equals(fromDb.getEnd()));
                 if (!alreadyPresent) {
                     professional.addAvailability(new Availability(professional, fromDb.getDate(),
-                            fromDb.getStart(), fromDb.getEnd()));
+                            fromDb.getStart(), fromDb.getEnd(), fromDb.isBooked()));
                 }
             }
         }

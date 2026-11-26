@@ -82,7 +82,15 @@ public class AppointmentController {
             return null; // that time no longer fits
         }
 
-        updateAvailabilityAfterCreateAppointment(availability, start, start.plusMinutes(currentService.getDurationMinutes()));
+        Availability booked;
+        try {
+            booked = availabilityService.bookSlot(availability, start, start.plusMinutes(currentService.getDurationMinutes()));
+        } catch (SQLException | RuntimeException e) {
+            availability.getAppointments().remove(appointment); // nothing was saved, so undo
+            ConsolePrinter.error("Could not book the appointment: " + e.getMessage());
+            return null;
+        }
+        booked.getAppointments().add(appointment);
 
         this.currentPatient.addAppointment(appointment);
         this.clinic.addAppointment(appointment);
@@ -93,20 +101,5 @@ public class AppointmentController {
         this.currentReferral = null;
 
         return appointment;
-    }
-
-    private void updateAvailabilityAfterCreateAppointment(Availability availability, LocalTime appointmentStart, LocalTime appointmentEnd) {
-        try{
-            availabilityService.removeAvailability(availability);
-            availabilityService.createAvailability(availability.getProfessional(), availability.getDate(), appointmentStart, appointmentEnd, true);
-            if(!appointmentStart.equals(availability.getStart())){
-                availabilityService.createAvailability(availability.getProfessional(), availability.getDate(), availability.getStart(), appointmentStart, false);
-            }
-            if(!appointmentEnd.equals(availability.getEnd())){
-                availabilityService.createAvailability(availability.getProfessional(), availability.getDate(), appointmentEnd, availability.getEnd(), false);
-            }
-        } catch (SQLException e) {
-            ConsolePrinter.error("Issue with updating availabilities: " + e.getMessage());
-        }
     }
 }

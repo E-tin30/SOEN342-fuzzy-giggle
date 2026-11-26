@@ -182,6 +182,7 @@ public class DatabaseGateway implements AutoCloseable {
         insertProfessional.close();
         insertAvailability.close();
         selectAllAvailabilities.close();
+        removeAvailability.close();
         conn.close();
     }
 }
