@@ -2,6 +2,7 @@ package services;
 
 import database.DatabaseGateway;
 import domain.Patient;
+import domain.ResourceType;
 import lombok.RequiredArgsConstructor;
 
 import java.io.IOException;
@@ -16,6 +17,7 @@ public class SeedService {
     private final PatientService patientService;
     private final CSVService csvService;
     private final ServiceCatalogService serviceCatalogService;
+    private final ResourceService resourceService;
 
     // fills an empty database with the sample data
     public void seedIfEmpty() throws SQLException, IOException {
@@ -25,6 +27,21 @@ public class SeedService {
             serviceCatalogService.addService("Cardiology consultation", "Cardiology", true, 45);
             serviceCatalogService.addService("Dermatology consultation", "Dermatology", true, 20);
             serviceCatalogService.addService("Orthopedic evaluation", "Orthopedics", true, 45);
+        }
+        if (db.countResources() == 0) {
+            resourceService.addResource("Exam Room 1", ResourceType.ROOM);
+            resourceService.addResource("Exam Room 2", ResourceType.ROOM);
+            resourceService.addResource("ECG Machine", ResourceType.EQUIPMENT);
+            resourceService.addResource("Ultrasound Machine", ResourceType.EQUIPMENT);
+            resourceService.addResource("Nurse", ResourceType.ROLE);
+            serviceCatalogService.linkResource("Routine follow-up", "Exam Room 1");
+            serviceCatalogService.linkResource("Primary care assessment", "Exam Room 1");
+            serviceCatalogService.linkResource("Primary care assessment", "Nurse");
+            serviceCatalogService.linkResource("Cardiology consultation", "Exam Room 1");
+            serviceCatalogService.linkResource("Cardiology consultation", "ECG Machine");
+            serviceCatalogService.linkResource("Dermatology consultation", "Exam Room 2");
+            serviceCatalogService.linkResource("Orthopedic evaluation", "Exam Room 2");
+            serviceCatalogService.linkResource("Orthopedic evaluation", "Nurse");
         }
         if (db.countPatients() == 0) {
             seedPatients();

@@ -3,6 +3,7 @@ package services;
 import domain.Availability;
 import domain.Clinic;
 import domain.Professional;
+import domain.Resource;
 import domain.Service;
 
 import java.sql.SQLException;
@@ -19,16 +20,18 @@ public class ClinicLoader {
     private final AvailabilityService availabilityService;
     private final ProfessionalService professionalService;
     private final ServiceCatalogService serviceCatalogService;
+    private final ResourceService resourceService;
 
     // slots already copied into the clinic (professional id | date | start | end)
     private final Set<String> loaded = new HashSet<>();
 
-    public ClinicLoader(Clinic clinic, AvailabilityService availabilityService,
-                        ProfessionalService professionalService, ServiceCatalogService serviceCatalogService) {
+    public ClinicLoader(Clinic clinic, AvailabilityService availabilityService, ProfessionalService professionalService, 
+                            ServiceCatalogService serviceCatalogService, ResourceService resourceService) {
         this.clinic = clinic;
         this.availabilityService = availabilityService;
         this.professionalService = professionalService;
         this.serviceCatalogService = serviceCatalogService;
+        this.resourceService = resourceService;
     }
 
     private Professional findProfessional(int id) {
@@ -43,6 +46,16 @@ public class ClinicLoader {
         for (Service service : serviceCatalogService.getAllServices()) {
             if (!clinic.offersService(service)) {
                 clinic.addService(service);
+            }
+        }
+    }
+
+    // loads all resources and adds them to the clinic if not already there
+    private void loadResources() throws SQLException {
+        for (Resource fromDb : resourceService.getAllResources()) {
+            boolean alreadyPresent = clinic.getResources().stream().anyMatch(r -> r.getId() == fromDb.getId());
+            if (!alreadyPresent) {
+                clinic.addResource(fromDb);
             }
         }
     }
@@ -62,6 +75,7 @@ public class ClinicLoader {
 
     public void sync() throws SQLException {
         loadServices();
+        loadResources();
 
         for (Professional fromDb : professionalService.getAllProfessionals()) {
             if (findProfessional(fromDb.getId()) == null) {

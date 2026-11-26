@@ -3,6 +3,7 @@ import controllers.AvailabilityController;
 import controllers.PatientController;
 import controllers.ProfessionalController;
 import controllers.ReferralRequiredException;
+import controllers.ResourceController;
 import controllers.ServiceNotOfferedException;
 import database.DatabaseGateway;
 import domain.ActivityLog;
@@ -15,6 +16,8 @@ import domain.PatientSearchSpecification;
 import domain.Professional;
 import domain.Referral;
 import domain.RepetitionPattern;
+import domain.Resource;
+import domain.ResourceType;
 import domain.Service;
 import domain.MonthlyPattern;
 import domain.WeeklyPattern;
@@ -24,6 +27,7 @@ import services.CSVService;
 import services.ClinicLoader;
 import services.PatientService;
 import services.ProfessionalService;
+import services.ResourceService;
 import services.SeedService;
 import services.ServiceCatalogService;
 import utils.ConsolePrinter;
@@ -66,10 +70,12 @@ public class AppointmentTrackingSystem {
                 ProfessionalService professionalService = new ProfessionalService(db);
                 ServiceCatalogService serviceCatalogService = new ServiceCatalogService(db);
                 ProfessionalController professionalController = new ProfessionalController(professionalService, serviceCatalogService);
-                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService);
+                ResourceService resourceService = new ResourceService(db);
+                ResourceController resourceController = new ResourceController(resourceService);
+                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService, resourceService);
                 PatientService patientService = new PatientService(db);
                 PatientController patientController = new PatientController(clinic, patientService);
-                SeedService seedService = new SeedService(db, patientService, csvService, serviceCatalogService);
+                SeedService seedService = new SeedService(db, patientService, csvService, serviceCatalogService, resourceService);
                 seedService.seedIfEmpty();
 
                 for (Patient p : patientService.getAllPatients()) {
@@ -140,7 +146,8 @@ public class AppointmentTrackingSystem {
                         }
                         case 7 -> registerPatientFlow(patientController); // register patient
                         case 8 -> registerProfessionalFlow(clinic, professionalController, clinicLoader); // register professional
-                        case 9 -> { //exit
+                        case 9 -> addResourceFlow(resourceController, clinicLoader); // add resource
+                        case 10 -> { //exit
                             scanner.close();
                             ConsolePrinter.goodbye();
                             System.exit(0);
@@ -531,15 +538,34 @@ public class AppointmentTrackingSystem {
 
             // or create new ones
             while (ask("Create a new service for this professional? (y/n): ").equalsIgnoreCase("y")) {
-                String name = ask("Service name: ");
-                int minutes = Integer.parseInt(ask("Duration in minutes: "));
-                boolean referral = ask("Requires a referral? (y/n): ").equalsIgnoreCase("y");
-                if (controller.addService(name, specialization, referral, minutes)) {
-                    serviceNames.add(name);
-                } else {
-                    System.out.println("A service with that name already exists. Pick it from the list instead.");
+            String name = ask("Service name: ");
+            int minutes = Integer.parseInt(ask("Duration in minutes: "));
+            boolean referral = ask("Requires a referral? (y/n): ").equalsIgnoreCase("y");
+
+            List<Resource> resources = clinic.getResources();
+            List<String> resourceNames = new ArrayList<>();
+            if (!resources.isEmpty()) {
+                for (int i = 0; i < resources.size(); i++) {
+                    System.out.println((i + 1) + ". " + resources.get(i).getName() + " (" + resources.get(i).getType() + ")");
+                }
+                String resourceInput = ask("Resources this service needs (numbers separated by commas, blank for none): ");
+                if (!resourceInput.isEmpty()) {
+                    for (String value : resourceInput.split(",")) {
+                        int number = Integer.parseInt(value.trim());
+                        if (number < 1 || number > resources.size()) {
+                            throw new NumberFormatException();
+                        }
+                        resourceNames.add(resources.get(number - 1).getName());
+                    }
                 }
             }
+
+            if (controller.addService(name, specialization, referral, minutes, resourceNames)) {
+                serviceNames.add(name);
+            } else {
+                System.out.println("A service with that name already exists. Pick it from the list instead.");
+            }
+        }
 
             boolean registered = controller.registerProfessional(first, last, title, specialization, serviceNames);
             if (registered) {
@@ -554,6 +580,36 @@ public class AppointmentTrackingSystem {
             ConsolePrinter.error(e.getMessage());
         } catch (java.sql.SQLException e) {
             ConsolePrinter.error("Could not register the professional: " + e.getMessage());
+        }
+    }
+
+    // case 9
+    private static void addResourceFlow(ResourceController controller, ClinicLoader clinicLoader) {
+        String name = ask("Resource name (blank to cancel): ");
+        if (name.isEmpty()) return;
+
+        System.out.println("""
+                Select a resource type:
+                1. Room
+                2. Equipment
+                3. Role (e.g. nurse, assistant)
+                """);
+        int type = pick("Selection (blank to cancel): ", 3);
+        if (type < 0) return;
+        ResourceType resourceType = ResourceType.values()[type];
+
+        try {
+            boolean added = controller.addResource(name, resourceType);
+            if (added) {
+                clinicLoader.sync();
+                System.out.println("Resource added.");
+            } else {
+                System.out.println("A resource with this name already exists.");
+            }
+        } catch (IllegalArgumentException e) {
+            ConsolePrinter.error(e.getMessage());
+        } catch (java.sql.SQLException e) {
+            ConsolePrinter.error("Could not add the resource: " + e.getMessage());
         }
     }
 

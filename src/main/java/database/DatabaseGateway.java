@@ -35,6 +35,11 @@ public class DatabaseGateway implements AutoCloseable {
     private final PreparedStatement linkProfessionalToService;
     private final PreparedStatement linkProfessionalToSpecialization;
     private final PreparedStatement selectServicesOfProfessional;
+    private final PreparedStatement insertResource;
+    private final PreparedStatement selectAllResources;
+    private final PreparedStatement selectResourceCount;
+    private final PreparedStatement linkServiceToResource;
+    private final PreparedStatement selectResourcesOfService;
 
     private final Map<List<String>, Integer> professionalCache = new HashMap<>();
 
@@ -86,6 +91,18 @@ public class DatabaseGateway implements AutoCloseable {
                             service_id INTEGER NOT NULL REFERENCES service(id),
                             PRIMARY KEY (professional_id, service_id)
                         )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS resource (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT NOT NULL UNIQUE,
+                            type TEXT NOT NULL CHECK (type IN ('ROOM', 'EQUIPMENT', 'ROLE'))
+                        )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS service_resource (
+                            service_id INTEGER NOT NULL REFERENCES service(id),
+                            resource_id INTEGER NOT NULL REFERENCES resource(id),
+                            PRIMARY KEY (service_id, resource_id)
+                        )""");
             }
 
             findProfessional = conn.prepareStatement(
@@ -131,6 +148,20 @@ public class DatabaseGateway implements AutoCloseable {
                     JOIN service s ON s.id = ps.service_id
                     WHERE ps.professional_id = ?
                     ORDER BY s.id
+                    """);
+            insertResource = conn.prepareStatement("INSERT OR IGNORE INTO resource(name, type) VALUES(?,?)");
+            selectAllResources = conn.prepareStatement("SELECT id, name, type FROM resource ORDER BY id");
+            selectResourceCount = conn.prepareStatement("SELECT COUNT(*) FROM resource");
+            linkServiceToResource = conn.prepareStatement(
+                    "INSERT OR IGNORE INTO service_resource(service_id, resource_id) "
+                            + "SELECT s.id, r.id FROM service s, resource r WHERE s.name = ? AND r.name = ?");
+            selectResourcesOfService = conn.prepareStatement("""
+                    SELECT r.id, r.name, r.type
+                    FROM service_resource sr
+                    JOIN service s ON s.id = sr.service_id
+                    JOIN resource r ON r.id = sr.resource_id
+                    WHERE s.name = ?
+                    ORDER BY r.id
                     """);
         } catch (SQLException e) {
             conn.close();
@@ -340,6 +371,47 @@ public class DatabaseGateway implements AutoCloseable {
         return rows;
     }
 
+    // returns false if a resource with this name already exists
+    public boolean addResource(String name, String type) throws SQLException {
+        insertResource.setString(1, name);
+        insertResource.setString(2, type);
+        return insertResource.executeUpdate() > 0;
+    }
+
+    public List<ResourceRow> findAllResources() throws SQLException {
+        List<ResourceRow> rows = new ArrayList<>();
+        try (ResultSet rs = selectAllResources.executeQuery()) {
+            while (rs.next()) {
+                rows.add(new ResourceRow(rs.getInt("id"), rs.getString("name"), rs.getString("type")));
+            }
+        }
+        return rows;
+    }
+
+    public int countResources() throws SQLException {
+        try (ResultSet rs = selectResourceCount.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    public boolean linkServiceToResource(String serviceName, String resourceName) throws SQLException {
+        linkServiceToResource.setString(1, serviceName);
+        linkServiceToResource.setString(2, resourceName);
+        return linkServiceToResource.executeUpdate() > 0;
+    }
+
+    public List<ResourceRow> findResourcesOfService(String serviceName) throws SQLException {
+        List<ResourceRow> rows = new ArrayList<>();
+        selectResourcesOfService.setString(1, serviceName);
+        try (ResultSet rs = selectResourcesOfService.executeQuery()) {
+            while (rs.next()) {
+                rows.add(new ResourceRow(rs.getInt("id"), rs.getString("name"), rs.getString("type")));
+            }
+        }
+        return rows;
+    }
+
     //added here temporarily because the system must start from fresh at the beginning of every run (I think it will be removed in iteration 3)
 //    public void clearAll() throws SQLException {
 //        try (Statement st = conn.createStatement()) {
@@ -370,6 +442,11 @@ public class DatabaseGateway implements AutoCloseable {
         linkProfessionalToService.close();
         linkProfessionalToSpecialization.close();
         selectServicesOfProfessional.close();
+        insertResource.close();
+        selectAllResources.close();
+        selectResourceCount.close();
+        linkServiceToResource.close();
+        selectResourcesOfService.close();
         conn.close();
     }
 }

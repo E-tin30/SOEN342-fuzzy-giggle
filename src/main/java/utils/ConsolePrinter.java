@@ -4,12 +4,14 @@ import domain.Appointment;
 import domain.Availability;
 import domain.Patient;
 import domain.Professional;
+import domain.Resource;
 import domain.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ConsolePrinter {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
@@ -43,7 +45,8 @@ public class ConsolePrinter {
                 6. Export availabilities from CSV
                 7. Register a patient
                 8. Register a professional
-                9. Exit
+                9. Add a resource
+                10. Exit
                 Enter the number of the option you want and press enter: 
                 """);
     }
@@ -99,9 +102,12 @@ public class ConsolePrinter {
         System.out.println();
         for (int i = 0; i < services.size(); i++) {
             Service s = services.get(i);
+            String needs = s.getRequiredResources().isEmpty() ? ""
+                    : " [needs: " + s.getRequiredResources().stream().map(Resource::getName).collect(Collectors.joining(", ")) + "]";
             System.out.println((i + 1) + ". " + s.getName()
                     + " - " + s.getDurationMinutes() + " min"
-                    + (s.requiresReferral() ? " (referral required)" : ""));
+                    + (s.requiresReferral() ? " (referral required)" : "")
+                    + needs);
         }
         System.out.println();
     }

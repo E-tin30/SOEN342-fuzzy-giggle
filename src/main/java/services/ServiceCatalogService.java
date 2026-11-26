@@ -1,8 +1,11 @@
 package services;
 
 import database.DatabaseGateway;
+import database.ResourceRow;
 import database.ServiceRow;
 import domain.Professional;
+import domain.Resource;
+import domain.ResourceType;
 import domain.Service;
 import lombok.RequiredArgsConstructor;
 
@@ -55,11 +58,19 @@ public class ServiceCatalogService {
         return service;
     }
 
-    private List<Service> toServices(List<ServiceRow> rows) {
+    private List<Service> toServices(List<ServiceRow> rows) throws SQLException {
         List<Service> services = new ArrayList<>();
         for (ServiceRow r : rows) {
-            services.add(new Service(r.name(), r.requiresReferral(), r.durationMinutes()));
+            Service service = new Service(r.name(), r.requiresReferral(), r.durationMinutes());
+            for (ResourceRow resource : db.findResourcesOfService(r.name())) {
+                service.addRequiredResource(new Resource(resource.id(), resource.name(), ResourceType.valueOf(resource.type())));
+            }
+            services.add(service);
         }
         return services;
+    }
+
+    public boolean linkResource(String serviceName, String resourceName) throws SQLException {
+        return db.linkServiceToResource(serviceName, resourceName);
     }
 }

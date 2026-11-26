@@ -1,10 +1,17 @@
 package domain;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import lombok.Getter;
+
+@Getter
 public class Service {
 
     private final String name;
     private final boolean requiresReferral;
     private final int durationMinutes;
+    private final List<Resource> requiredResources = new ArrayList<>();
 
     public Service(String name, boolean requiresReferral, int durationMinutes){
         if(durationMinutes <= 0){
@@ -15,16 +22,15 @@ public class Service {
         this.durationMinutes = durationMinutes;
     }
 
-    public int getDurationMinutes(){
-        return durationMinutes;
+    public void addRequiredResource(Resource resource){
+        if(resource == null){
+            throw new IllegalArgumentException("Resource can't be null");
+        }
+        requiredResources.add(resource);
     }
 
     public boolean requiresReferral(){
         return requiresReferral;
-    }
-
-    public String getName(){
-        return name;
     }
 
     @Override

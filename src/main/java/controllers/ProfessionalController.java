@@ -17,7 +17,13 @@ public class ProfessionalController {
     }
 
     // returns false if a service with this name already exists
-    public boolean addService(String name, String specialization, boolean requiresReferral, int minutes) throws SQLException {
-        return serviceCatalogService.addService(name, specialization, requiresReferral, minutes);
+    public boolean addService(String name, String specialization, boolean requiresReferral, int minutes, List<String> resourceNames) throws SQLException {
+        boolean added = serviceCatalogService.addService(name, specialization, requiresReferral, minutes);
+        if (added) {
+            for (String resourceName : resourceNames) {
+                serviceCatalogService.linkResource(name, resourceName);
+            }
+        }
+        return added;
     }
 }
