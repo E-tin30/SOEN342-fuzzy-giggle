@@ -37,7 +37,8 @@ public class AvailabilityService {
                     professional,
                     LocalDate.parse(r.date()),
                     LocalTime.parse(r.start()),
-                    LocalTime.parse(r.end())));
+                    LocalTime.parse(r.end()),
+                    r.isBooked()));
         }
         return availabilities;
     }
@@ -139,7 +140,7 @@ public class AvailabilityService {
                         professional.getTitle(), professional.getSpecialization());
 
                 if (db.addAvailability(professionalId, availability.getDate(),
-                        availability.getStart(), availability.getEnd(), false)) {
+                        availability.getStart(), availability.getEnd(), availability.isBooked())) {
                     saved.add(availability);
                 }
             }
@@ -164,6 +165,32 @@ public class AvailabilityService {
         if (!end.isAfter(start)) {
             throw new IllegalArgumentException("End time must be after start time.");
         }
+    }
+
+    public Availability bookSlot(Availability original, LocalTime bStart, LocalTime bEnd) throws SQLException {
+        Professional p = original.getProfessional();
+        db.begin();
+        try {
+            if (!db.removeAvailability(original)) throw new IllegalStateException("Availability not in database");
+            insertOrFail(p.getId(), original.getDate(), bStart, bEnd, true);
+            if (bStart.isAfter(original.getStart())) insertOrFail(p.getId(), original.getDate(), original.getStart(), bStart, false);
+            if (bEnd.isBefore(original.getEnd())) insertOrFail(p.getId(), original.getDate(), bEnd, original.getEnd(), false);
+            db.commit();
+        } catch (Exception e) {
+            db.rollback();
+            throw e;
+        }
+        // mirror the db in memory (see Professional below)
+        p.removeAvailability(original);
+        Availability booked = new Availability(p, original.getDate(), bStart, bEnd, true);
+        p.addAvailability(booked);
+        if (bStart.isAfter(original.getStart())) p.addAvailability(new Availability(p, original.getDate(), original.getStart(), bStart, false));
+        if (bEnd.isBefore(original.getEnd())) p.addAvailability(new Availability(p, original.getDate(), bEnd, original.getEnd(), false));
+        return booked;
+    }
+
+    private void insertOrFail(int profId, LocalDate d, LocalTime s, LocalTime e, boolean isBooked) throws SQLException {
+        if (!db.addAvailability(profId, d, s, e, isBooked)) throw new IllegalStateException("Could not save " + d + " " + s + "-" + e);
     }
 
 }
