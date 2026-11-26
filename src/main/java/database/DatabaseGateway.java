@@ -24,6 +24,10 @@ public class DatabaseGateway implements AutoCloseable {
     private final PreparedStatement insertAvailability;
     private final PreparedStatement removeAvailability;
     private final PreparedStatement selectAllAvailabilities;
+    private final PreparedStatement insertPatient;
+    private final PreparedStatement selectAllPatients;
+    private final PreparedStatement selectPatientCount;
+    private final PreparedStatement selectProfessionalCount;
 
     private final Map<List<String>, Integer> professionalCache = new HashMap<>();
 
@@ -51,6 +55,16 @@ public class DatabaseGateway implements AutoCloseable {
                             professional_id INTEGER NOT NULL REFERENCES professional(id),
                             UNIQUE(professional_id, date, start_time)
                         )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS patient (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            first_name TEXT NOT NULL,
+                            last_name TEXT NOT NULL,
+                            date_of_birth TEXT NOT NULL,
+                            phone_number TEXT NOT NULL,
+                            ramq TEXT NOT NULL UNIQUE,
+                            insurance TEXT NOT NULL
+                        )""");
             }
 
             findProfessional = conn.prepareStatement(
@@ -71,6 +85,12 @@ public class DatabaseGateway implements AutoCloseable {
                     JOIN professional p ON p.id = a.professional_id
                     ORDER BY p.last_name, p.first_name, a.date, a.start_time
                     """);
+            insertPatient = conn.prepareStatement(
+                    "INSERT OR IGNORE INTO patient(first_name, last_name, date_of_birth, phone_number, ramq, insurance) " + "VALUES(?,?,?,?,?,?)");
+            selectAllPatients = conn.prepareStatement(
+                    "SELECT first_name, last_name, date_of_birth, phone_number, ramq, insurance "+ "FROM patient ORDER BY last_name, first_name");
+            selectPatientCount = conn.prepareStatement("SELECT COUNT(*) FROM patient");
+            selectProfessionalCount = conn.prepareStatement("SELECT COUNT(*) FROM professional");
         } catch (SQLException e) {
             conn.close();
             throw e;
@@ -164,6 +184,47 @@ public class DatabaseGateway implements AutoCloseable {
         return rows;
     }
 
+    // adds a patient, returns false if the RAMQ number already exists
+    public boolean addPatient(String first, String last, LocalDate dob, String phone, String ramq, String insurance) throws SQLException {
+        insertPatient.setString(1, first);
+        insertPatient.setString(2, last);
+        insertPatient.setString(3, dob.toString());
+        insertPatient.setString(4, phone);
+        insertPatient.setString(5, ramq);
+        insertPatient.setString(6, insurance);
+        return insertPatient.executeUpdate() > 0;
+    }
+
+    public List<PatientRow> findAllPatients() throws SQLException {
+        List<PatientRow> rows = new ArrayList<>();
+        try (ResultSet rs = selectAllPatients.executeQuery()) {
+            while (rs.next()) {
+                rows.add(new PatientRow(
+                        rs.getString("first_name"),
+                        rs.getString("last_name"),
+                        rs.getString("date_of_birth"),
+                        rs.getString("phone_number"),
+                        rs.getString("ramq"),
+                        rs.getString("insurance")));
+            }
+        }
+        return rows;
+    }
+
+    public int countPatients() throws SQLException {
+        try (ResultSet rs = selectPatientCount.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    public int countProfessionals() throws SQLException {
+        try (ResultSet rs = selectProfessionalCount.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
     //added here temporarily because the system must start from fresh at the beginning of every run (I think it will be removed in iteration 3)
 //    public void clearAll() throws SQLException {
 //        try (Statement st = conn.createStatement()) {
@@ -183,6 +244,10 @@ public class DatabaseGateway implements AutoCloseable {
         insertAvailability.close();
         selectAllAvailabilities.close();
         removeAvailability.close();
+        insertPatient.close();
+        selectAllPatients.close();
+        selectPatientCount.close();
+        selectProfessionalCount.close();
         conn.close();
     }
 }

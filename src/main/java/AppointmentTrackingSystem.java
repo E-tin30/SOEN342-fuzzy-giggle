@@ -20,6 +20,8 @@ import domain.DailyPattern;
 import services.AvailabilityService;
 import services.CSVService;
 import services.ClinicLoader;
+import services.PatientService;
+import services.SeedService;
 import utils.ConsolePrinter;
 
 import java.nio.file.Files;
@@ -60,14 +62,14 @@ public class AppointmentTrackingSystem {
                 AppointmentController appointmentController = new AppointmentController(clinic, activityLog, availabilityService);
                 ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService);
 
-                clinic.addPatient(new Patient("Émilie", "Lavoie", LocalDate.parse("1990-04-12"), "514-555-0101", "LAVE90041201", "RAMQ"));
-                clinic.addPatient(new Patient("Olivier", "Côté", LocalDate.parse("1985-09-30"), "514-555-0102", "COTO85093001", "RAMQ"));
-                clinic.addPatient(new Patient("Fatima", "Benali", LocalDate.parse("1978-01-22"), "438-555-0103", "BENF78012201", "RAMQ"));
-                clinic.addPatient(new Patient("Thomas", "Girard", LocalDate.parse("2001-06-05"), "514-555-0104", "GIRT01060501", "RAMQ"));
-                clinic.addPatient(new Patient("Juliette", "Morin", LocalDate.parse("1995-11-18"), "438-555-0105", "MORJ95111801", "RAMQ"));
-                clinic.addPatient(new Patient("Alexandre", "Dubois", LocalDate.parse("1969-03-09"), "514-555-0106", "DUBA69030901", "Manulife"));
-                clinic.addPatient(new Patient("Maya", "Nguyen", LocalDate.parse("1999-07-27"), "438-555-0107", "NGUM99072701", "Blue Cross"));
-                clinic.addPatient(new Patient("Gabriel", "Fortin", LocalDate.parse("1982-12-14"), "514-555-0108", "FORG82121401", "RAMQ"));
+                PatientService patientService = new PatientService(db);
+                SeedService seedService = new SeedService(db, patientService, csvService);
+                seedService.seedIfEmpty();
+
+                for (Patient p : patientService.getAllPatients()) {
+                    clinic.addPatient(p);
+                }
+                clinicLoader.sync();
 
                 ConsolePrinter.greeting();
 
