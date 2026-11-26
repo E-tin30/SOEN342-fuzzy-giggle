@@ -8,6 +8,7 @@ import lombok.Setter;
 @Setter 
 @AllArgsConstructor
 public class Referral {
+    private final Patient patient;
     private final String referringPhysician;
     private final String referralType;
     private final String requestedSpecialty;
