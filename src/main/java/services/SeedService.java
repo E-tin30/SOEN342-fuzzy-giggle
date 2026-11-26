@@ -15,9 +15,17 @@ public class SeedService {
     private final DatabaseGateway db;
     private final PatientService patientService;
     private final CSVService csvService;
+    private final ServiceCatalogService serviceCatalogService;
 
     // fills an empty database with the sample data
     public void seedIfEmpty() throws SQLException, IOException {
+        if (db.countServices() == 0) {
+            serviceCatalogService.addService("Routine follow-up", "Family Medicine", false, 30);
+            serviceCatalogService.addService("Primary care assessment", "Primary Care", false, 30);
+            serviceCatalogService.addService("Cardiology consultation", "Cardiology", true, 45);
+            serviceCatalogService.addService("Dermatology consultation", "Dermatology", true, 20);
+            serviceCatalogService.addService("Orthopedic evaluation", "Orthopedics", true, 45);
+        }
         if (db.countPatients() == 0) {
             seedPatients();
         }

@@ -42,7 +42,8 @@ public class ConsolePrinter {
                 5. Import availabilities from CSV
                 6. Export availabilities from CSV
                 7. Register a patient
-                8. Exit
+                8. Register a professional
+                9. Exit
                 Enter the number of the option you want and press enter: 
                 """);
     }

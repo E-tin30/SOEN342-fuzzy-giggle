@@ -1,6 +1,7 @@
 import controllers.AppointmentController;
 import controllers.AvailabilityController;
 import controllers.PatientController;
+import controllers.ProfessionalController;
 import controllers.ReferralRequiredException;
 import controllers.ServiceNotOfferedException;
 import database.DatabaseGateway;
@@ -22,7 +23,9 @@ import services.AvailabilityService;
 import services.CSVService;
 import services.ClinicLoader;
 import services.PatientService;
+import services.ProfessionalService;
 import services.SeedService;
+import services.ServiceCatalogService;
 import utils.ConsolePrinter;
 
 import java.nio.file.Files;
@@ -32,6 +35,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -50,27 +54,28 @@ public class AppointmentTrackingSystem {
 
             try (DatabaseGateway db = new DatabaseGateway("jdbc:sqlite:data/app.db")) {
                 //updated: no longer clearing database on start
-//                db.clearAll();
+                //db.clearAll();
 
-                //domain
                 Clinic clinic = new Clinic("Clinic", "Montreal");
                 ActivityLog activityLog = new ActivityLog();
 
-                //services
                 CSVService csvService = new CSVService(db);
                 AvailabilityService availabilityService = new AvailabilityService(db);
                 AvailabilityController availabilityController = new AvailabilityController(clinic, availabilityService);
                 AppointmentController appointmentController = new AppointmentController(clinic, activityLog, availabilityService);
-                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService);
-
+                ProfessionalService professionalService = new ProfessionalService(db);
+                ServiceCatalogService serviceCatalogService = new ServiceCatalogService(db);
+                ProfessionalController professionalController = new ProfessionalController(professionalService, serviceCatalogService);
+                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService);
                 PatientService patientService = new PatientService(db);
                 PatientController patientController = new PatientController(clinic, patientService);
-                SeedService seedService = new SeedService(db, patientService, csvService);
+                SeedService seedService = new SeedService(db, patientService, csvService, serviceCatalogService);
                 seedService.seedIfEmpty();
 
                 for (Patient p : patientService.getAllPatients()) {
                     clinic.addPatient(p);
                 }
+
                 clinicLoader.sync();
 
                 ConsolePrinter.greeting();
@@ -133,8 +138,9 @@ public class AppointmentTrackingSystem {
                                 ConsolePrinter.error("Unable to export availabilities to CSV.");
                             }
                         }
-                        case 7 -> {registerPatientFlow(patientController);}
-                        case 8 -> { //exit
+                        case 7 -> registerPatientFlow(patientController); // register patient
+                        case 8 -> registerProfessionalFlow(clinic, professionalController, clinicLoader); // register professional
+                        case 9 -> { //exit
                             scanner.close();
                             ConsolePrinter.goodbye();
                             System.exit(0);
@@ -473,28 +479,82 @@ public class AppointmentTrackingSystem {
     }
 
     private static void registerPatientFlow(PatientController controller) {
-    String first = ask("First name (blank to cancel): ");
-    if (first.isEmpty()) return;
-    String last = ask("Last name: ");
-    LocalDate dob = askDate("Date of birth (yyyy-mm-dd): ");
-    if (dob == null) return;
-    String phone = ask("Phone number: ");
-    String ramq = ask("Insurance (RAMQ) number: ");
-    String insurance = ask("Insurance provider: ");
+        String first = ask("First name (blank to cancel): ");
+        if (first.isEmpty()) return;
+        String last = ask("Last name: ");
+        LocalDate dob = askDate("Date of birth (yyyy-mm-dd): ");
+        if (dob == null) return;
+        String phone = ask("Phone number: ");
+        String ramq = ask("Insurance (RAMQ) number: ");
+        String insurance = ask("Insurance provider: ");
 
-    if (last.isEmpty() || phone.isEmpty() || ramq.isEmpty() || insurance.isEmpty()) {
-        ConsolePrinter.error("All fields are required.");
-        return;
+        if (last.isEmpty() || phone.isEmpty() || ramq.isEmpty() || insurance.isEmpty()) {
+            ConsolePrinter.error("All fields are required.");
+            return;
+        }
+
+        try {
+            boolean registered = controller.registerPatient(first, last, dob, phone, ramq, insurance);
+            System.out.println(registered
+                    ? "Patient registered."
+                    : "A patient with this RAMQ number is already registered.");
+        } catch (java.sql.SQLException e) {
+            ConsolePrinter.error("Could not register the patient: " + e.getMessage());
+        }
+        
     }
 
-    try {
-        boolean registered = controller.registerPatient(first, last, dob, phone, ramq, insurance);
-        System.out.println(registered
-                ? "Patient registered."
-                : "A patient with this RAMQ number is already registered.");
-    } catch (java.sql.SQLException e) {
-        ConsolePrinter.error("Could not register the patient: " + e.getMessage());
+    // case 8
+    private static void registerProfessionalFlow(Clinic clinic, ProfessionalController controller, ClinicLoader clinicLoader) {
+        String first = ask("First name (blank to cancel): ");
+        if (first.isEmpty()) return;
+        String last = ask("Last name: ");
+        String title = ask("Title (e.g. Dr.): ");
+        String specialization = ask("Specialization: ");
+
+        try {
+            List<String> serviceNames = new ArrayList<>();
+
+            // pick from the existing services
+            List<Service> services = clinic.getOfferedServices();
+            ConsolePrinter.printServices(services);
+            String input = ask("Services offered (numbers separated by commas, blank = default for this specialization): ");
+            if (!input.isEmpty()) {
+                for (String value : input.split(",")) {
+                    int number = Integer.parseInt(value.trim());
+                    if (number < 1 || number > services.size()) {
+                        throw new NumberFormatException();
+                    }
+                    serviceNames.add(services.get(number - 1).getName());
+                }
+            }
+
+            // or create new ones
+            while (ask("Create a new service for this professional? (y/n): ").equalsIgnoreCase("y")) {
+                String name = ask("Service name: ");
+                int minutes = Integer.parseInt(ask("Duration in minutes: "));
+                boolean referral = ask("Requires a referral? (y/n): ").equalsIgnoreCase("y");
+                if (controller.addService(name, specialization, referral, minutes)) {
+                    serviceNames.add(name);
+                } else {
+                    System.out.println("A service with that name already exists. Pick it from the list instead.");
+                }
+            }
+
+            boolean registered = controller.registerProfessional(first, last, title, specialization, serviceNames);
+            if (registered) {
+                clinicLoader.sync();
+                System.out.println("Professional registered.");
+            } else {
+                System.out.println("This professional is already registered.");
+            }
+        } catch (NumberFormatException e) {
+            ConsolePrinter.error("Invalid number.");
+        } catch (IllegalArgumentException e) {
+            ConsolePrinter.error(e.getMessage());
+        } catch (java.sql.SQLException e) {
+            ConsolePrinter.error("Could not register the professional: " + e.getMessage());
+        }
     }
-}
 
 }

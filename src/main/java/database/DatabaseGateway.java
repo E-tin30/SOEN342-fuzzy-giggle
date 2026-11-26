@@ -28,6 +28,13 @@ public class DatabaseGateway implements AutoCloseable {
     private final PreparedStatement selectAllPatients;
     private final PreparedStatement selectPatientCount;
     private final PreparedStatement selectProfessionalCount;
+    private final PreparedStatement selectAllProfessionals;
+    private final PreparedStatement insertService;
+    private final PreparedStatement selectAllServices;
+    private final PreparedStatement selectServiceCount;
+    private final PreparedStatement linkProfessionalToService;
+    private final PreparedStatement linkProfessionalToSpecialization;
+    private final PreparedStatement selectServicesOfProfessional;
 
     private final Map<List<String>, Integer> professionalCache = new HashMap<>();
 
@@ -65,6 +72,20 @@ public class DatabaseGateway implements AutoCloseable {
                             ramq TEXT NOT NULL UNIQUE,
                             insurance TEXT NOT NULL
                         )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS service (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT NOT NULL UNIQUE,
+                            specialization TEXT NOT NULL,
+                            requires_referral INTEGER NOT NULL DEFAULT 0,
+                            duration_minutes INTEGER NOT NULL CHECK (duration_minutes > 0)
+                        )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS professional_service (
+                            professional_id INTEGER NOT NULL REFERENCES professional(id),
+                            service_id INTEGER NOT NULL REFERENCES service(id),
+                            PRIMARY KEY (professional_id, service_id)
+                        )""");
             }
 
             findProfessional = conn.prepareStatement(
@@ -91,6 +112,26 @@ public class DatabaseGateway implements AutoCloseable {
                     "SELECT first_name, last_name, date_of_birth, phone_number, ramq, insurance "+ "FROM patient ORDER BY last_name, first_name");
             selectPatientCount = conn.prepareStatement("SELECT COUNT(*) FROM patient");
             selectProfessionalCount = conn.prepareStatement("SELECT COUNT(*) FROM professional");
+            selectAllProfessionals = conn.prepareStatement(
+                    "SELECT id, first_name, last_name, title, specialization FROM professional ORDER BY last_name, first_name");
+            insertService = conn.prepareStatement(
+                    "INSERT OR IGNORE INTO service(name, specialization, requires_referral, duration_minutes) VALUES(?,?,?,?)");
+            selectAllServices = conn.prepareStatement(
+                    "SELECT name, specialization, requires_referral, duration_minutes FROM service ORDER BY id");
+            selectServiceCount = conn.prepareStatement("SELECT COUNT(*) FROM service");
+            linkProfessionalToService = conn.prepareStatement(
+                    "INSERT OR IGNORE INTO professional_service(professional_id, service_id) "
+                            + "SELECT ?, id FROM service WHERE name = ?");
+            linkProfessionalToSpecialization = conn.prepareStatement(
+                    "INSERT OR IGNORE INTO professional_service(professional_id, service_id) "
+                            + "SELECT ?, id FROM service WHERE specialization = ?");
+            selectServicesOfProfessional = conn.prepareStatement("""
+                    SELECT s.name, s.specialization, s.requires_referral, s.duration_minutes
+                    FROM professional_service ps
+                    JOIN service s ON s.id = ps.service_id
+                    WHERE ps.professional_id = ?
+                    ORDER BY s.id
+                    """);
         } catch (SQLException e) {
             conn.close();
             throw e;
@@ -225,6 +266,80 @@ public class DatabaseGateway implements AutoCloseable {
         }
     }
 
+    // creates a professional, returns the new id or -1 if it already exists
+    public int addProfessional(String firstName, String lastName, String title, String specialization) throws SQLException {
+        findProfessional.setString(1, firstName);
+        findProfessional.setString(2, lastName);
+        findProfessional.setString(3, title);
+        findProfessional.setString(4, specialization);
+        try (ResultSet rs = findProfessional.executeQuery()) {
+            if (rs.next()) return -1;
+        }
+        return findOrCreateProfessional(firstName, lastName, title, specialization);
+    }
+
+    public List<ProfessionalRow> findAllProfessionals() throws SQLException {
+        List<ProfessionalRow> rows = new ArrayList<>();
+        try (ResultSet rs = selectAllProfessionals.executeQuery()) {
+            while (rs.next()) {
+                rows.add(new ProfessionalRow(rs.getInt("id"), rs.getString("first_name"),
+                        rs.getString("last_name"), rs.getString("title"), rs.getString("specialization")));
+            }
+        }
+        return rows;
+    }
+
+    public boolean addService(String name, String specialization, boolean requiresReferral, int minutes) throws SQLException {
+        insertService.setString(1, name);
+        insertService.setString(2, specialization);
+        insertService.setBoolean(3, requiresReferral);
+        insertService.setInt(4, minutes);
+        return insertService.executeUpdate() > 0;
+    }
+
+    public List<ServiceRow> findAllServices() throws SQLException {
+        List<ServiceRow> rows = new ArrayList<>();
+        try (ResultSet rs = selectAllServices.executeQuery()) {
+            while (rs.next()) {
+                rows.add(new ServiceRow(rs.getString("name"), rs.getString("specialization"),
+                        rs.getBoolean("requires_referral"), rs.getInt("duration_minutes")));
+            }
+        }
+        return rows;
+    }
+
+    public int countServices() throws SQLException {
+        try (ResultSet rs = selectServiceCount.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    public boolean linkProfessionalToService(int professionalId, String serviceName) throws SQLException {
+        linkProfessionalToService.setInt(1, professionalId);
+        linkProfessionalToService.setString(2, serviceName);
+        return linkProfessionalToService.executeUpdate() > 0;
+    }
+
+    // links the professional to every service tagged with that specialization
+    public boolean linkProfessionalToSpecialization(int professionalId, String specialization) throws SQLException {
+        linkProfessionalToSpecialization.setInt(1, professionalId);
+        linkProfessionalToSpecialization.setString(2, specialization);
+        return linkProfessionalToSpecialization.executeUpdate() > 0;
+    }
+
+    public List<ServiceRow> findServicesOfProfessional(int professionalId) throws SQLException {
+        List<ServiceRow> rows = new ArrayList<>();
+        selectServicesOfProfessional.setInt(1, professionalId);
+        try (ResultSet rs = selectServicesOfProfessional.executeQuery()) {
+            while (rs.next()) {
+                rows.add(new ServiceRow(rs.getString("name"), rs.getString("specialization"),
+                        rs.getBoolean("requires_referral"), rs.getInt("duration_minutes")));
+            }
+        }
+        return rows;
+    }
+
     //added here temporarily because the system must start from fresh at the beginning of every run (I think it will be removed in iteration 3)
 //    public void clearAll() throws SQLException {
 //        try (Statement st = conn.createStatement()) {
@@ -248,6 +363,13 @@ public class DatabaseGateway implements AutoCloseable {
         selectAllPatients.close();
         selectPatientCount.close();
         selectProfessionalCount.close();
+        selectAllProfessionals.close();
+        insertService.close();
+        selectAllServices.close();
+        selectServiceCount.close();
+        linkProfessionalToService.close();
+        linkProfessionalToSpecialization.close();
+        selectServicesOfProfessional.close();
         conn.close();
     }
 }
