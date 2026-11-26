@@ -46,18 +46,18 @@ public class AppointmentTrackingSystem {
             Files.createDirectories(Path.of("data"));
 
             try (DatabaseGateway db = new DatabaseGateway("jdbc:sqlite:data/app.db")) {
-                //clear db on start
-                db.clearAll();
+                //updated: no longer clearing database on start
+//                db.clearAll();
 
                 //domain
                 Clinic clinic = new Clinic("Clinic", "Montreal");
                 ActivityLog activityLog = new ActivityLog();
-                AppointmentController appointmentController = new AppointmentController(clinic, activityLog);
 
                 //services
                 CSVService csvService = new CSVService(db);
                 AvailabilityService availabilityService = new AvailabilityService(db);
                 AvailabilityController availabilityController = new AvailabilityController(clinic, availabilityService);
+                AppointmentController appointmentController = new AppointmentController(clinic, activityLog, availabilityService);
                 ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService);
 
                 clinic.addPatient(new Patient("Émilie", "Lavoie", LocalDate.parse("1990-04-12"), "514-555-0101", "LAVE90041201", "RAMQ"));
@@ -355,7 +355,7 @@ public class AppointmentTrackingSystem {
         if (end == null) return;
 
         if (type == 0) {
-            boolean created = controller.createSingleAvailability(professional, date, start, end);
+            boolean created = controller.createSingleAvailability(professional, date, start, end, false);
             System.out.println(created
                     ? "Availability created."
                     : "Availability was not created because it conflicts with an existing availability.");

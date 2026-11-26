@@ -90,7 +90,7 @@ public class Clinic {
         for (Professional p : professionals) {
             if (professional != null && !p.equals(professional)) continue; // wrong professional
             if (service != null && !p.offersService(service)) continue; // doesn't offer service
-            results.addAll(p.getAvailabilities(range, minutes)); // null range = no filter
+            results.addAll(p.getAvailabilities(range, minutes).stream().filter(a -> !a.isBooked()).toList()); // null range = no filter
         }
         return results;
     }

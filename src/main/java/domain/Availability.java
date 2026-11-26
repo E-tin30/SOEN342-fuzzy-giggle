@@ -15,6 +15,7 @@ public class Availability {
     private LocalDate date;
     private LocalTime start;
     private LocalTime end;
+    private boolean isBooked;
     private final List<Appointment> appointments = new ArrayList<>(); // already booked inside this block
 
     public Availability(Professional professional, LocalDate date, LocalTime start, LocalTime end) {
@@ -22,6 +23,14 @@ public class Availability {
         this.date = date;
         this.start = start;
         this.end = end;
+        this.isBooked = false;
+    }
+    public Availability(Professional professional, LocalDate date, LocalTime start, LocalTime end, boolean isBooked) {
+        this.professional = professional;
+        this.date = date;
+        this.start = start;
+        this.end = end;
+        this.isBooked = isBooked;
     }
 
     // null range means "no filter"
@@ -80,5 +89,4 @@ public class Availability {
         //Check if the time intervals overlap
         return this.start.isBefore(other.getEnd()) && this.end.isAfter(other.getStart());
     }
-
 }

@@ -19,8 +19,8 @@ import java.util.*;
 
 @RequiredArgsConstructor
 public class CSVService {
-    private static final String HEADER = "first_name,last_name,title,specialization,date,start,end";
-    private static final int COLUMNS = 7;
+    private static final String HEADER = "first_name,last_name,title,specialization,date,start,end,is_booked";
+    private static final int COLUMNS = 8;
 
     private final DatabaseGateway db;
 
@@ -59,6 +59,7 @@ public class CSVService {
                     LocalDate date = LocalDate.parse(c.get(4).trim());
                     LocalTime start = LocalTime.parse(c.get(5).trim());
                     LocalTime end = LocalTime.parse(c.get(6).trim());
+                    boolean isBooked = Boolean.parseBoolean(c.get(7).trim());
 
                     if (firstName.isEmpty() || lastName.isEmpty()) {
                         System.out.println("Line " + lineNo + ": missing name, skipped.");
@@ -72,7 +73,7 @@ public class CSVService {
                     }
 
                     int professionalId = db.findOrCreateProfessional(firstName, lastName, title, specialization);
-                    if (db.addAvailability(professionalId, date, start, end)) {
+                    if (db.addAvailability(professionalId, date, start, end, isBooked)) {
                         added++;
                     } else {
                         System.out.println("Line " + lineNo + ": duplicate availability, skipped.");
@@ -107,7 +108,8 @@ public class CSVService {
                         row.specialization(),
                         row.date(),
                         row.start(),
-                        row.end()));
+                        row.end(),
+                        Boolean.toString(row.isBooked())));
                 writer.newLine();
             }
         }

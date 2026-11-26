@@ -24,8 +24,8 @@ public class AvailabilityController {
         return this.clinic.searchAvailability(service, professional, range);
     }
 
-    public boolean createSingleAvailability(Professional professional, LocalDate date, LocalTime start, LocalTime end) throws SQLException {
-        return availabilityService.createAvailability(professional, date, start, end);
+    public boolean createSingleAvailability(Professional professional, LocalDate date, LocalTime start, LocalTime end, boolean isBooked) throws SQLException {
+        return availabilityService.createAvailability(professional, date, start, end, isBooked);
     }
 
     public int createRecurringAvailability(Professional professional, DateRange range, RepetitionPattern pattern, LocalTime start, LocalTime end) throws SQLException {

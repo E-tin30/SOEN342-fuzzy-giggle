@@ -1,5 +1,7 @@
 package database;
 
+import domain.Availability;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -20,6 +22,7 @@ public class DatabaseGateway implements AutoCloseable {
     private final PreparedStatement findProfessional;
     private final PreparedStatement insertProfessional;
     private final PreparedStatement insertAvailability;
+    private final PreparedStatement removeAvailability;
     private final PreparedStatement selectAllAvailabilities;
 
     private final Map<List<String>, Integer> professionalCache = new HashMap<>();
@@ -44,6 +47,7 @@ public class DatabaseGateway implements AutoCloseable {
                             date TEXT NOT NULL,
                             start_time TEXT NOT NULL,
                             end_time TEXT NOT NULL,
+                            is_booked INTEGER NOT NULL DEFAULT 0,
                             professional_id INTEGER NOT NULL REFERENCES professional(id),
                             UNIQUE(professional_id, date, start_time)
                         )""");
@@ -56,11 +60,13 @@ public class DatabaseGateway implements AutoCloseable {
                     "INSERT INTO professional(first_name, last_name, title, specialization) VALUES(?,?,?,?)",
                     Statement.RETURN_GENERATED_KEYS);
             insertAvailability = conn.prepareStatement(
-                    "INSERT OR IGNORE INTO availability(date, start_time, end_time, professional_id) "
-                            + "VALUES(?,?,?,?)");
+                    "INSERT OR IGNORE INTO availability(date, start_time, end_time, professional_id, is_booked) "
+                            + "VALUES(?,?,?,?,?)");
+            removeAvailability = conn.prepareStatement(
+                    "DELETE FROM availability WHERE professional_id = ? AND date = ? AND start_time = ?");
             selectAllAvailabilities = conn.prepareStatement("""
                     SELECT p.id, p.first_name, p.last_name, p.title, p.specialization,
-                           a.date, a.start_time, a.end_time
+                           a.date, a.start_time, a.end_time, a.is_booked
                     FROM availability a
                     JOIN professional p ON p.id = a.professional_id
                     ORDER BY p.last_name, p.first_name, a.date, a.start_time
@@ -121,12 +127,21 @@ public class DatabaseGateway implements AutoCloseable {
 
     // adds an availability into the database
     public boolean addAvailability(int professional_id, LocalDate date,
-                                   LocalTime start, LocalTime end) throws SQLException {
+                                   LocalTime start, LocalTime end, boolean isBooked) throws SQLException {
         insertAvailability.setString(1, date.toString());   // yyyy-MM-dd
         insertAvailability.setString(2, start.toString());  // HH:mm
         insertAvailability.setString(3, end.toString());
         insertAvailability.setInt(4, professional_id);
+        insertAvailability.setBoolean(5, isBooked);
         return insertAvailability.executeUpdate() > 0;
+    }
+
+    //removes availability from database
+    public boolean removeAvailability(Availability availability) throws SQLException {
+        removeAvailability.setInt(1, availability.getProfessional().getId());
+        removeAvailability.setString(2, availability.getDate().toString());
+        removeAvailability.setString(3, availability.getStart().toString());
+        return removeAvailability.executeUpdate() > 0;
     }
 
     // finds and returns all the availabilities from the database
@@ -142,22 +157,23 @@ public class DatabaseGateway implements AutoCloseable {
                         rs.getString("specialization"),
                         rs.getString("date"),
                         rs.getString("start_time"),
-                        rs.getString("end_time")));
+                        rs.getString("end_time"),
+                        rs.getBoolean("is_booked")));
             }
         }
         return rows;
     }
 
     //added here temporarily because the system must start from fresh at the beginning of every run (I think it will be removed in iteration 3)
-    public void clearAll() throws SQLException {
-        try (Statement st = conn.createStatement()) {
-            st.executeUpdate("DELETE FROM availability");
-            st.executeUpdate("DELETE FROM professional");
-            // resets ids at 1
-            st.executeUpdate("DELETE FROM sqlite_sequence WHERE name IN ('availability', 'professional')");
-        }
-        professionalCache.clear(); // cached ids no longer exist
-    }
+//    public void clearAll() throws SQLException {
+//        try (Statement st = conn.createStatement()) {
+//            st.executeUpdate("DELETE FROM availability");
+//            st.executeUpdate("DELETE FROM professional");
+//            // resets ids at 1
+//            st.executeUpdate("DELETE FROM sqlite_sequence WHERE name IN ('availability', 'professional')");
+//        }
+//        professionalCache.clear();
+//    }
 
     // forced by the AutoCloseable interface to clear everything
     @Override

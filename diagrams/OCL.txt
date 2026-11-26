@@ -1,0 +1,17 @@
+context Appointment
+    inv: self.start < self.end
+
+context Referral
+    inv: self.referringPhysician->size() = 1
+
+context Referral
+    inv: self.referredPhysician->size() = 1 or self.specialty->size() = 1
+
+context Appointment
+    inv: self.professional.availabilities->exists(a: Availability | a.date = self.date and a.start <= self.start and a.end >= self.end)
+
+context Professional
+    inv: self.appointments->forAll(a1, a2: Appointment | a1 <> a2 implies a1.date <> a2.date or a1.end <= a2.start or a2.end <= a1.start)
+
+context Resource
+    inv: self.appointments->forAll(a1, a2: Appointment | a1 <> a2 implies a1.date <> a2.date or a1.end <= a2.start or a2.end <= a1.start)
