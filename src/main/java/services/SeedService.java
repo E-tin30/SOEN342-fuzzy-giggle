@@ -47,11 +47,11 @@ public class SeedService {
             seedPatients();
         }
         if (db.countProfessionals() == 0) {
-            Path csv = Path.of("sample-availabilities.csv");
+            Path csv = Path.of("seed-availabilities.csv");
             if (Files.exists(csv)) {
                 csvService.importAvailabilitiesFromCSV(csv);
             } else {
-                System.out.println("sample-availabilities.csv not found, skipping availability seed.");
+                System.out.println("seed-availabilities.csv not found, skipping availability seed.");
             }
         }
     }
