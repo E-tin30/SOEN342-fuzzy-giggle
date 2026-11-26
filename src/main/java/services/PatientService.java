@@ -21,15 +21,20 @@ public class PatientService {
                 || patient.getRamq() == null || patient.getInsurance() == null) {
             throw new IllegalArgumentException("Patient information cannot be null.");
         }
-        return db.addPatient(patient.getFirstName(), patient.getLastName(), patient.getDateOfBirth(),
-                patient.getPhoneNumber(), patient.getRamq(), patient.getInsurance());
+        int id = db.addPatient(patient.getFirstName(), patient.getLastName(), patient.getDateOfBirth(),
+            patient.getPhoneNumber(), patient.getRamq(), patient.getInsurance());
+        if (id < 0) return false;
+        patient.setId(id);
+        return true;
     }
 
     public List<Patient> getAllPatients() throws SQLException {
         List<Patient> patients = new ArrayList<>();
         for (PatientRow r : db.findAllPatients()) {
-            patients.add(new Patient(r.firstName(), r.lastName(), LocalDate.parse(r.dateOfBirth()),
-                    r.phoneNumber(), r.ramq(), r.insurance()));
+            Patient patient = new Patient(r.firstName(), r.lastName(), LocalDate.parse(r.dateOfBirth()),
+                    r.phoneNumber(), r.ramq(), r.insurance());
+            patient.setId(r.id());
+            patients.add(patient);
         }
         return patients;
     }

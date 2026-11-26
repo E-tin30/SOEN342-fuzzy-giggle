@@ -8,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -40,6 +41,10 @@ public class DatabaseGateway implements AutoCloseable {
     private final PreparedStatement selectResourceCount;
     private final PreparedStatement linkServiceToResource;
     private final PreparedStatement selectResourcesOfService;
+    private final PreparedStatement insertWaitlistEntry;
+    private final PreparedStatement selectActiveWaitlist;
+    private final PreparedStatement updateWaitlistPriority;
+    private final PreparedStatement updateWaitlistStatus;
 
     private final Map<List<String>, Integer> professionalCache = new HashMap<>();
 
@@ -103,6 +108,20 @@ public class DatabaseGateway implements AutoCloseable {
                             resource_id INTEGER NOT NULL REFERENCES resource(id),
                             PRIMARY KEY (service_id, resource_id)
                         )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS waitlist_entry (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            patient_id INTEGER NOT NULL REFERENCES patient(id),
+                            professional_id INTEGER REFERENCES professional(id),
+                            specialization TEXT,
+                            date_from TEXT,
+                            date_to TEXT,
+                            priority INTEGER NOT NULL DEFAULT 3 CHECK (priority BETWEEN 1 AND 5),
+                            status TEXT NOT NULL DEFAULT 'WAITING'
+                                CHECK (status IN ('WAITING', 'OFFERED', 'REMOVED', 'BOOKED')),
+                            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CHECK (professional_id IS NOT NULL OR specialization IS NOT NULL)
+                        )""");
             }
 
             findProfessional = conn.prepareStatement(
@@ -123,10 +142,9 @@ public class DatabaseGateway implements AutoCloseable {
                     JOIN professional p ON p.id = a.professional_id
                     ORDER BY p.last_name, p.first_name, a.date, a.start_time
                     """);
-            insertPatient = conn.prepareStatement(
-                    "INSERT OR IGNORE INTO patient(first_name, last_name, date_of_birth, phone_number, ramq, insurance) " + "VALUES(?,?,?,?,?,?)");
+            insertPatient = conn.prepareStatement("INSERT OR IGNORE INTO patient(first_name, last_name, date_of_birth, phone_number, ramq, insurance) VALUES(?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS);
             selectAllPatients = conn.prepareStatement(
-                    "SELECT first_name, last_name, date_of_birth, phone_number, ramq, insurance "+ "FROM patient ORDER BY last_name, first_name");
+                    "SELECT id, first_name, last_name, date_of_birth, phone_number, ramq, insurance "+ "FROM patient ORDER BY last_name, first_name");
             selectPatientCount = conn.prepareStatement("SELECT COUNT(*) FROM patient");
             selectProfessionalCount = conn.prepareStatement("SELECT COUNT(*) FROM professional");
             selectAllProfessionals = conn.prepareStatement(
@@ -163,6 +181,18 @@ public class DatabaseGateway implements AutoCloseable {
                     WHERE s.name = ?
                     ORDER BY r.id
                     """);
+            insertWaitlistEntry = conn.prepareStatement(
+                    "INSERT INTO waitlist_entry(patient_id, professional_id, specialization, date_from, date_to, priority) "
+                            + "VALUES(?,?,?,?,?,?)",
+                    Statement.RETURN_GENERATED_KEYS);
+            selectActiveWaitlist = conn.prepareStatement("""
+                    SELECT id, patient_id, professional_id, specialization, date_from, date_to, priority, status
+                    FROM waitlist_entry
+                    WHERE status IN ('WAITING', 'OFFERED')
+                    ORDER BY priority, created_at, id
+                    """);
+            updateWaitlistPriority = conn.prepareStatement("UPDATE waitlist_entry SET priority = ? WHERE id = ?");
+            updateWaitlistStatus = conn.prepareStatement("UPDATE waitlist_entry SET status = ? WHERE id = ?");
         } catch (SQLException e) {
             conn.close();
             throw e;
@@ -257,14 +287,18 @@ public class DatabaseGateway implements AutoCloseable {
     }
 
     // adds a patient, returns false if the RAMQ number already exists
-    public boolean addPatient(String first, String last, LocalDate dob, String phone, String ramq, String insurance) throws SQLException {
+    public int addPatient(String first, String last, LocalDate dob, String phone, String ramq, String insurance) throws SQLException {
         insertPatient.setString(1, first);
         insertPatient.setString(2, last);
         insertPatient.setString(3, dob.toString());
         insertPatient.setString(4, phone);
         insertPatient.setString(5, ramq);
         insertPatient.setString(6, insurance);
-        return insertPatient.executeUpdate() > 0;
+        if (insertPatient.executeUpdate() == 0) return -1;
+        try (ResultSet keys = insertPatient.getGeneratedKeys()) {
+            keys.next();
+            return keys.getInt(1);
+        }
     }
 
     public List<PatientRow> findAllPatients() throws SQLException {
@@ -272,6 +306,7 @@ public class DatabaseGateway implements AutoCloseable {
         try (ResultSet rs = selectAllPatients.executeQuery()) {
             while (rs.next()) {
                 rows.add(new PatientRow(
+                        rs.getInt("id"),
                         rs.getString("first_name"),
                         rs.getString("last_name"),
                         rs.getString("date_of_birth"),
@@ -412,6 +447,53 @@ public class DatabaseGateway implements AutoCloseable {
         return rows;
     }
 
+    // returns the new entry id
+    public int addWaitlistEntry(int patientId, Integer professionalId, String specialization,
+                                LocalDate from, LocalDate to, int priority) throws SQLException {
+        insertWaitlistEntry.setInt(1, patientId);
+        if (professionalId == null) {
+            insertWaitlistEntry.setNull(2, Types.INTEGER);
+        } else {
+            insertWaitlistEntry.setInt(2, professionalId);
+        }
+        insertWaitlistEntry.setString(3, specialization);
+        insertWaitlistEntry.setString(4, from == null ? null : from.toString());
+        insertWaitlistEntry.setString(5, to == null ? null : to.toString());
+        insertWaitlistEntry.setInt(6, priority);
+        insertWaitlistEntry.executeUpdate();
+        try (ResultSet keys = insertWaitlistEntry.getGeneratedKeys()) {
+            keys.next();
+            return keys.getInt(1);
+        }
+    }
+
+    // entries still waiting or offered, highest priority first
+    public List<WaitlistRow> findActiveWaitlist() throws SQLException {
+        List<WaitlistRow> rows = new ArrayList<>();
+        try (ResultSet rs = selectActiveWaitlist.executeQuery()) {
+            while (rs.next()) {
+                int professionalId = rs.getInt("professional_id");
+                Integer professional = rs.wasNull() ? null : professionalId;
+                rows.add(new WaitlistRow(rs.getInt("id"), rs.getInt("patient_id"), professional,
+                        rs.getString("specialization"), rs.getString("date_from"), rs.getString("date_to"),
+                        rs.getInt("priority"), rs.getString("status")));
+            }
+        }
+        return rows;
+    }
+
+    public boolean setWaitlistPriority(int id, int priority) throws SQLException {
+        updateWaitlistPriority.setInt(1, priority);
+        updateWaitlistPriority.setInt(2, id);
+        return updateWaitlistPriority.executeUpdate() > 0;
+    }
+
+    public boolean setWaitlistStatus(int id, String status) throws SQLException {
+        updateWaitlistStatus.setString(1, status);
+        updateWaitlistStatus.setInt(2, id);
+        return updateWaitlistStatus.executeUpdate() > 0;
+    }
+
     //added here temporarily because the system must start from fresh at the beginning of every run (I think it will be removed in iteration 3)
 //    public void clearAll() throws SQLException {
 //        try (Statement st = conn.createStatement()) {
@@ -447,6 +529,10 @@ public class DatabaseGateway implements AutoCloseable {
         selectResourceCount.close();
         linkServiceToResource.close();
         selectResourcesOfService.close();
+        insertWaitlistEntry.close();
+        selectActiveWaitlist.close();
+        updateWaitlistPriority.close();
+        updateWaitlistStatus.close();
         conn.close();
     }
 }

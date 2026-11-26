@@ -57,8 +57,13 @@ public class SeedService {
     }
 
     private void seedPatients() throws SQLException {
-        // paste the 8 patients from main() here, one line each:
         patientService.registerPatient(new Patient("Émilie", "Lavoie", LocalDate.parse("1990-04-12"), "514-555-0101", "LAVE90041201", "RAMQ"));
-        // ... the other 7
+        patientService.registerPatient(new Patient("Olivier", "Côté", LocalDate.parse("1985-09-30"), "514-555-0102", "COTO85093001", "RAMQ"));
+        patientService.registerPatient(new Patient("Fatima", "Benali", LocalDate.parse("1978-01-22"), "438-555-0103", "BENF78012201", "RAMQ"));
+        patientService.registerPatient(new Patient("Thomas", "Girard", LocalDate.parse("2001-06-05"), "514-555-0104", "GIRT01060501", "RAMQ"));
+        patientService.registerPatient(new Patient("Juliette", "Morin", LocalDate.parse("1995-11-18"), "438-555-0105", "MORJ95111801", "RAMQ"));
+        patientService.registerPatient(new Patient("Alexandre", "Dubois", LocalDate.parse("1969-03-09"), "514-555-0106", "DUBA69030901", "Manulife"));
+        patientService.registerPatient(new Patient("Maya", "Nguyen", LocalDate.parse("1999-07-27"), "438-555-0107", "NGUM99072701", "Blue Cross"));
+        patientService.registerPatient(new Patient("Gabriel", "Fortin", LocalDate.parse("1982-12-14"), "514-555-0108", "FORG82121401", "RAMQ"));
     }
 }
