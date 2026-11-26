@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import services.WaitlistService;
 
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -31,5 +32,21 @@ public class WaitlistController {
 
     public void removeFromWaitlist(WaitlistEntry entry) throws SQLException {
         waitlistService.remove(entry);
+    }
+
+    public List<WaitlistEntry> findEligible(Professional professional, LocalDate date) throws SQLException {
+        return waitlistService.findEligible(clinic, professional, date);
+    }
+
+    public void markOffered(WaitlistEntry entry) throws SQLException {
+        waitlistService.markOffered(entry);
+    }
+
+    public void markBooked(WaitlistEntry entry) throws SQLException {
+        waitlistService.markBooked(entry);
+    }
+
+    public void declineOffer(WaitlistEntry entry) throws SQLException {
+        waitlistService.declineOffer(entry);
     }
 }

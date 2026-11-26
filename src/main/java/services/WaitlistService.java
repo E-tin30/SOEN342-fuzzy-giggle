@@ -93,4 +93,47 @@ public class WaitlistService {
         }
         return null;
     }
+
+    // waiting entries that match an opening with this professional on this date, highest priority first
+    public List<WaitlistEntry> findEligible(Clinic clinic, Professional professional, LocalDate date)
+            throws SQLException {
+        List<WaitlistEntry> eligible = new ArrayList<>();
+        for (WaitlistEntry w : getActiveEntries(clinic)) {
+            if (w.getStatus() == WaitlistStatus.WAITING && matches(w, professional, date)) {
+                eligible.add(w);
+            }
+        }
+        return eligible;
+    }
+
+    private boolean matches(WaitlistEntry w, Professional professional, LocalDate date) {
+        if (w.getProfessional() != null) {
+            if (w.getProfessional().getId() != professional.getId()) return false;
+        } else {
+            String spec = professional.getSpecialization();
+            if (spec == null || !spec.equalsIgnoreCase(w.getSpecialization())) return false;
+        }
+        DateRange range = w.getDateRange();
+        return range == null || (!date.isBefore(range.from()) && !date.isAfter(range.to()));
+    }
+
+    public void markOffered(WaitlistEntry entry) throws SQLException {
+        setStatus(entry, WaitlistStatus.OFFERED);
+    }
+
+    public void markBooked(WaitlistEntry entry) throws SQLException {
+        setStatus(entry, WaitlistStatus.BOOKED);
+    }
+
+    // the patient said no, or nothing was booked: back to waiting, same priority
+    public void declineOffer(WaitlistEntry entry) throws SQLException {
+        setStatus(entry, WaitlistStatus.WAITING);
+    }
+
+    private void setStatus(WaitlistEntry entry, WaitlistStatus status) throws SQLException {
+        if (!db.setWaitlistStatus(entry.getId(), status.name())) {
+            throw new IllegalStateException("This waitlist entry no longer exists.");
+        }
+        entry.setStatus(status);
+    }
 }
