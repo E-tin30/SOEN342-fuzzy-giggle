@@ -1,5 +1,6 @@
 import controllers.AppointmentController;
 import controllers.AvailabilityController;
+import controllers.PatientController;
 import controllers.ReferralRequiredException;
 import controllers.ServiceNotOfferedException;
 import database.DatabaseGateway;
@@ -63,6 +64,7 @@ public class AppointmentTrackingSystem {
                 ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService);
 
                 PatientService patientService = new PatientService(db);
+                PatientController patientController = new PatientController(clinic, patientService);
                 SeedService seedService = new SeedService(db, patientService, csvService);
                 seedService.seedIfEmpty();
 
@@ -131,7 +133,8 @@ public class AppointmentTrackingSystem {
                                 ConsolePrinter.error("Unable to export availabilities to CSV.");
                             }
                         }
-                        case 7 -> { //exit
+                        case 7 -> {registerPatientFlow(patientController);}
+                        case 8 -> { //exit
                             scanner.close();
                             ConsolePrinter.goodbye();
                             System.exit(0);
@@ -468,5 +471,30 @@ public class AppointmentTrackingSystem {
         }
         return new DateRange(startDate, endDate);
     }
+
+    private static void registerPatientFlow(PatientController controller) {
+    String first = ask("First name (blank to cancel): ");
+    if (first.isEmpty()) return;
+    String last = ask("Last name: ");
+    LocalDate dob = askDate("Date of birth (yyyy-mm-dd): ");
+    if (dob == null) return;
+    String phone = ask("Phone number: ");
+    String ramq = ask("Insurance (RAMQ) number: ");
+    String insurance = ask("Insurance provider: ");
+
+    if (last.isEmpty() || phone.isEmpty() || ramq.isEmpty() || insurance.isEmpty()) {
+        ConsolePrinter.error("All fields are required.");
+        return;
+    }
+
+    try {
+        boolean registered = controller.registerPatient(first, last, dob, phone, ramq, insurance);
+        System.out.println(registered
+                ? "Patient registered."
+                : "A patient with this RAMQ number is already registered.");
+    } catch (java.sql.SQLException e) {
+        ConsolePrinter.error("Could not register the patient: " + e.getMessage());
+    }
+}
 
 }
