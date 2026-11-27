@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
+import database.CalendarAppointment;
 import domain.*;
 import lombok.RequiredArgsConstructor;
 import services.AvailabilityService;
@@ -105,13 +106,13 @@ public class AppointmentController {
         return appointment;
     }
 
-    public List<Appointment> findAppointmentsOfProfessionalForCalendarFrom(int professionalId, LocalDate from) throws SQLException {
+    public List<CalendarAppointment> findAppointmentsOfProfessionalForCalendarFrom(int professionalId, LocalDate from) throws SQLException {
         return appointmentService.findAppointmentsOfProfessionalForCalendarFrom(professionalId, from);
     }
-    public List<Appointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException{
+    public List<CalendarAppointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException{
         return appointmentService.findAppointmentsOfPatientForCalendarFrom(patientId, from);
     }
-    public List<Appointment> findAppointmentsOfReferralTypeForCalendarFrom( LocalDate from) throws SQLException {
+    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom( LocalDate from) throws SQLException {
         return appointmentService.findAppointmentsOfReferralTypeForCalendarFrom( from);
     }
 }

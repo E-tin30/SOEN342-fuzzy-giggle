@@ -1,5 +1,6 @@
 package services;
 
+import database.CalendarAppointment;
 import database.DatabaseGateway;
 import domain.Appointment;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +25,7 @@ public class AppointmentService {
         }
     }
 
-    public List<Appointment> findAppointmentsOfProfessionalForCalendarFrom(int professionalId, LocalDate from) throws SQLException {
+    public List<CalendarAppointment> findAppointmentsOfProfessionalForCalendarFrom(int professionalId, LocalDate from) throws SQLException {
         db.begin();
         try{
             return db.findAppointmentsOfProfessionalForCalendarFrom(professionalId, from);
@@ -34,7 +35,7 @@ public class AppointmentService {
         }
     }
 
-    public List<Appointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException{
+    public List<CalendarAppointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException{
         db.begin();
         try{
             return db.findAppointmentsOfPatientForCalendarFrom(patientId, from);
@@ -44,7 +45,7 @@ public class AppointmentService {
         }
     }
 
-    public List<Appointment> findAppointmentsOfReferralTypeForCalendarFrom(LocalDate from) throws SQLException {
+    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom(LocalDate from) throws SQLException {
         //TODO: add referralType to params
         db.begin();
         try{
