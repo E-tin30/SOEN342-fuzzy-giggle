@@ -1,11 +1,4 @@
-import controllers.AppointmentController;
-import controllers.AvailabilityController;
-import controllers.PatientController;
-import controllers.ProfessionalController;
-import controllers.ReferralRequiredException;
-import controllers.ResourceController;
-import controllers.ServiceNotOfferedException;
-import controllers.WaitlistController;
+import controllers.*;
 import database.DatabaseGateway;
 import domain.ActivityLog;
 import domain.Appointment;
@@ -25,7 +18,9 @@ import domain.pattern.MonthlyPattern;
 import domain.pattern.WeeklyPattern;
 import domain.pattern.DailyPattern;
 import services.*;
+import utils.CalendarGateway;
 import utils.ConsolePrinter;
+import utils.ICal4jCalendarGateway;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -74,6 +69,11 @@ public class AppointmentTrackingSystem {
                 ProfessionalController professionalController = new ProfessionalController(professionalService, serviceCatalogService);
                 ResourceController resourceController = new ResourceController(resourceService);
                 WaitlistController waitlistController = new WaitlistController(clinic, waitlistService);
+
+                //calendar export setup
+                CalendarGateway calendarGateway = new ICal4jCalendarGateway();
+                CalendarExportService calendarExportService = new CalendarExportService(calendarGateway);
+                CalendarExportController calendarExportController = new CalendarExportController(calendarExportService);
 
                 ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService, resourceService);
 
@@ -150,7 +150,7 @@ public class AppointmentTrackingSystem {
                         case 8 -> registerProfessionalFlow(clinic, professionalController, clinicLoader); // register professional
                         case 9 -> addResourceFlow(resourceController, clinicLoader); // add resource
                         case 10 -> waitlistMenuFlow(clinic, appointmentController, waitlistController, clinicLoader);
-                        case 11 -> exportToCalendarFlow(appointmentController, clinic);
+                        case 11 -> exportToCalendarFlow(appointmentController, clinic, calendarExportController);
                         case 12 -> { //exit
                             scanner.close();
                             ConsolePrinter.goodbye();
@@ -777,7 +777,7 @@ public class AppointmentTrackingSystem {
     }
 
     //case 11
-    private static boolean exportToCalendarFlow(AppointmentController appointmentController, Clinic clinic) {
+    private static boolean exportToCalendarFlow(AppointmentController appointmentController, Clinic clinic, CalendarExportController calendarExportController) {
         int choice = pick("""
                 Would you like to export to .ics for...
                 1. Patient
@@ -810,10 +810,11 @@ public class AppointmentTrackingSystem {
             case 3 -> {
                 // 1. find and select referral
                 // TODO: complete referrals
+                appointments = null;
             }
         }
 
-
+        calendarExportController.exportCalendar("", appointments);
 
 
         return true;
