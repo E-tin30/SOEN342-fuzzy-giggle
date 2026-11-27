@@ -3,6 +3,7 @@ package services;
 import database.CalendarAppointment;
 import database.DatabaseGateway;
 import domain.Appointment;
+import domain.ReferralType;
 import lombok.RequiredArgsConstructor;
 
 import java.sql.SQLException;
@@ -45,11 +46,10 @@ public class AppointmentService {
         }
     }
 
-    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom(LocalDate from) throws SQLException {
-        //TODO: add referralType to params
+    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom(ReferralType referralType, LocalDate from) throws SQLException {
         db.begin();
         try{
-            return db.findAppointmentsOfReferralTypeForCalendarFrom( from);
+            return db.findAppointmentsOfReferralTypeForCalendarFrom(referralType, from);
         } catch (SQLException e) {
             db.rollback();
             throw e;

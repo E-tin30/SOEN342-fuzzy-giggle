@@ -112,7 +112,7 @@ public class AppointmentController {
     public List<CalendarAppointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException{
         return appointmentService.findAppointmentsOfPatientForCalendarFrom(patientId, from);
     }
-    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom( LocalDate from) throws SQLException {
-        return appointmentService.findAppointmentsOfReferralTypeForCalendarFrom( from);
+    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom(ReferralType referralType, LocalDate from) throws SQLException {
+        return appointmentService.findAppointmentsOfReferralTypeForCalendarFrom(referralType, from);
     }
 }

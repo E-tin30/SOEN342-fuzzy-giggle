@@ -28,7 +28,7 @@ public class ICal4jCalendarGateway implements CalendarGateway {
             VEvent event = new VEvent(
                     a.start().atZone(ZONE).toInstant(),
                     a.end().atZone(ZONE).toInstant(),
-                    "Appointment with " + a.professional());
+                    titleFor(a));
             event.add(new Uid("appt-" + a.id() + "@clinic.ca"));
             calendar.add(event);
         }
@@ -40,5 +40,15 @@ public class ICal4jCalendarGateway implements CalendarGateway {
             ConsolePrinter.error("Could not generate .ics file.");
             throw new CalendarExportException("Could not generate .ics file", e);
         }
+    }
+
+    private String titleFor(CalendarAppointment a) {
+        if (a.referralType() != null) {
+            return "Appointment for referral type " + a.referralType();
+        }
+        if (a.professional() != null) {
+            return "Appointment with " + a.professional();
+        }
+        return "Appointment";
     }
 }

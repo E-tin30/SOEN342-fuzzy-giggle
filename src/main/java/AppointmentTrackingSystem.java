@@ -1,20 +1,8 @@
 import controllers.*;
 import database.CalendarAppointment;
 import database.DatabaseGateway;
-import domain.ActivityLog;
-import domain.Appointment;
-import domain.Availability;
-import domain.Clinic;
-import domain.DateRange;
-import domain.Patient;
-import domain.PatientSearchSpecification;
-import domain.Professional;
-import domain.Referral;
+import domain.*;
 import domain.pattern.RepetitionPattern;
-import domain.Resource;
-import domain.ResourceType;
-import domain.Service;
-import domain.WaitlistEntry;
 import domain.pattern.MonthlyPattern;
 import domain.pattern.WeeklyPattern;
 import domain.pattern.DailyPattern;
@@ -313,10 +301,30 @@ public class AppointmentTrackingSystem {
     private static Referral askReferral(Service service) {
         String physician = ask("Referring physician (blank to cancel): ");
         if (physician.isEmpty()) return null;
-        String type = ask("Referral type: ");
+        ReferralType type = askReferralType();
         String reason = ask("Clinical reason: ");
         String priority = ask("Priority: ");
         return new Referral(physician, type, service.getName(), "", reason, priority, "VALID");
+    }
+
+    private static ReferralType askReferralType() {
+        int selection = pick("""
+                Referral Type:
+                1. Speciality
+                2. Physician
+                Enter selection (number, leave blank for NONE): 
+                """, 2);
+        switch (selection) {
+            case 1 -> {
+                return ReferralType.SPECIALITY;
+            }
+            case 2 -> {
+                return ReferralType.PHYSICIAN;
+            }
+            default -> {
+                return ReferralType.NONE;
+            }
+        }
     }
 
     // case 3
@@ -814,7 +822,9 @@ public class AppointmentTrackingSystem {
                 }
                 case 3 -> {
                     // 1. find and select referral
-                    // TODO: complete referrals
+                    ReferralType referralType = askReferralType();
+                    // 2. get appointments based on referral type
+                    appointments = appointmentController.findAppointmentsOfReferralTypeForCalendarFrom(referralType, from);
                 }
             }
 

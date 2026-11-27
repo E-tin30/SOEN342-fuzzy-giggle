@@ -3,6 +3,7 @@ package database;
 import domain.Appointment;
 import domain.Availability;
 import domain.Clinic;
+import domain.ReferralType;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -51,6 +52,7 @@ public class DatabaseGateway implements AutoCloseable {
     private final PreparedStatement insertAppointment;
     private final PreparedStatement selectCalendarAppointmentsByProfessional;
     private final PreparedStatement selectCalendarAppointmentsByPatient;
+    private final PreparedStatement selectCalendarAppointmentsByReferralType;
     private final PreparedStatement insertClinic;
     private final PreparedStatement selectClinicCount;
 
@@ -136,7 +138,7 @@ public class DatabaseGateway implements AutoCloseable {
                             professional_id INTEGER NOT NULL REFERENCES professional(id),
                             patient_id INTEGER NOT NULL REFERENCES patient(id),
                             service_id INTEGER NOT NULL REFERENCES service(id),
-                            referral_id INTEGER,
+                            referral_id INTEGER NOT NULL REFERENCES referral(id),
                             clinic_id INTEGER,
                             date TEXT NOT NULL,
                             start_time TEXT NOT NULL,
@@ -149,6 +151,12 @@ public class DatabaseGateway implements AutoCloseable {
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             name TEXT NOT NULL,
                             location TEXT NOT NULL
+                        )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS referral (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            referral_type TEXT NOT NULL
+                                CHECK (referral_type IN ('SPECIALITY', 'PHYSICIAN', 'NONE'))
                         )""");
             }
 
@@ -242,6 +250,15 @@ public class DatabaseGateway implements AutoCloseable {
                       AND a.status <> 'CANCELLED'
                     ORDER BY a.date, a.start_time
                     """);
+            selectCalendarAppointmentsByReferralType = conn.prepareStatement("""
+                SELECT a.id, a.date, a.start_time, a.end_time
+                FROM appointment a
+                JOIN referral r ON r.id = a.referral_id
+                WHERE r.referral_type = ?
+                  AND a.date >= ?
+                  AND a.status <> 'CANCELLED'
+                ORDER BY a.date, a.start_time
+                """);
             insertClinic = conn.prepareStatement("INSERT OR IGNORE INTO clinic (name, location) VALUES (?,?)");
             selectClinicCount = conn.prepareStatement("SELECT COUNT(*) FROM clinic");
         } catch (SQLException e) {
@@ -599,7 +616,7 @@ public class DatabaseGateway implements AutoCloseable {
                 LocalDate date = LocalDate.parse(rs.getString("date"));
                 LocalDateTime start = LocalDateTime.of(date, LocalTime.parse(rs.getString("start_time")));
                 LocalDateTime end = LocalDateTime.of(date, LocalTime.parse(rs.getString("end_time")));
-                result.add(new CalendarAppointment(rs.getInt("id"), start, end, null));
+                result.add(new CalendarAppointment(rs.getInt("id"), start, end, null, null));
             }
         }
         return result;
@@ -617,15 +634,25 @@ public class DatabaseGateway implements AutoCloseable {
                 String professional = rs.getString("title") + " "
                         + rs.getString("first_name") + " "
                         + rs.getString("last_name");
-                result.add(new CalendarAppointment(rs.getInt("id"), start, end, professional));
+                result.add(new CalendarAppointment(rs.getInt("id"), start, end, professional, null));
             }
         }
         return result;
     }
 
-    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom( LocalDate from) throws SQLException {
-        //TODO
-        return null;
+    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom(ReferralType referralType, LocalDate from) throws SQLException {
+        List<CalendarAppointment> result = new ArrayList<>();
+        selectCalendarAppointmentsByReferralType.setString(1, referralType.name());
+        selectCalendarAppointmentsByReferralType.setString(2, from.toString());
+        try (ResultSet rs = selectCalendarAppointmentsByReferralType.executeQuery()) {
+            while (rs.next()) {
+                LocalDate date = LocalDate.parse(rs.getString("date"));
+                LocalDateTime start = LocalDateTime.of(date, LocalTime.parse(rs.getString("start_time")));
+                LocalDateTime end = LocalDateTime.of(date, LocalTime.parse(rs.getString("end_time")));
+                result.add(new CalendarAppointment(rs.getInt("id"), start, end, null, referralType));
+            }
+        }
+        return result;
     }
 
     // forced by the AutoCloseable interface to clear everything
@@ -659,6 +686,7 @@ public class DatabaseGateway implements AutoCloseable {
         insertAppointment.close();
         selectCalendarAppointmentsByProfessional.close();
         selectCalendarAppointmentsByPatient.close();
+        selectCalendarAppointmentsByReferralType.close();
         insertClinic.close();
         conn.close();
     }
