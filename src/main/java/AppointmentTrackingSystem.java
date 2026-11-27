@@ -830,7 +830,6 @@ public class AppointmentTrackingSystem {
 
             calendarExportController.exportCalendar("", appointments);
 
-
             return true;
         } catch (Exception e) {
             ConsolePrinter.error("Error while exporting to calendar, try again latter.");
