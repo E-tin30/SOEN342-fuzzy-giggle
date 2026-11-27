@@ -9,7 +9,7 @@ import domain.Availability;
 import domain.Clinic;
 import domain.DateRange;
 import domain.Professional;
-import domain.RepetitionPattern;
+import domain.pattern.RepetitionPattern;
 import domain.Service;
 import lombok.AllArgsConstructor;
 import services.AvailabilityService;

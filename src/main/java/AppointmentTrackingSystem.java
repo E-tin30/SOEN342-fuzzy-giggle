@@ -1,39 +1,15 @@
-import controllers.AppointmentController;
-import controllers.AvailabilityController;
-import controllers.PatientController;
-import controllers.ProfessionalController;
-import controllers.ReferralRequiredException;
-import controllers.ResourceController;
-import controllers.ServiceNotOfferedException;
-import controllers.WaitlistController;
+import controllers.*;
+import database.CalendarAppointment;
 import database.DatabaseGateway;
-import domain.ActivityLog;
-import domain.Appointment;
-import domain.Availability;
-import domain.Clinic;
-import domain.DateRange;
-import domain.Patient;
-import domain.PatientSearchSpecification;
-import domain.Professional;
-import domain.Referral;
-import domain.RepetitionPattern;
-import domain.Resource;
-import domain.ResourceType;
-import domain.Service;
-import domain.WaitlistEntry;
-import domain.MonthlyPattern;
-import domain.WeeklyPattern;
-import domain.DailyPattern;
-import services.AvailabilityService;
-import services.CSVService;
-import services.ClinicLoader;
-import services.PatientService;
-import services.ProfessionalService;
-import services.ResourceService;
-import services.SeedService;
-import services.ServiceCatalogService;
-import services.WaitlistService;
+import domain.*;
+import domain.pattern.RepetitionPattern;
+import domain.pattern.MonthlyPattern;
+import domain.pattern.WeeklyPattern;
+import domain.pattern.DailyPattern;
+import services.*;
+import utils.CalendarGateway;
 import utils.ConsolePrinter;
+import utils.ICal4jCalendarGateway;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -60,27 +36,37 @@ public class AppointmentTrackingSystem {
             Files.createDirectories(Path.of("data"));
 
             try (DatabaseGateway db = new DatabaseGateway("jdbc:sqlite:data/app.db")) {
-                //updated: no longer clearing database on start
-                //db.clearAll();
 
-                Clinic clinic = new Clinic("Clinic", "Montreal");
+                Clinic clinic = new Clinic(1, "Clinic", "Montreal");
                 ActivityLog activityLog = new ActivityLog();
 
-                CSVService csvService = new CSVService(db);
+                //services
+                AppointmentService appointmentService = new AppointmentService(db);
                 AvailabilityService availabilityService = new AvailabilityService(db);
-                AvailabilityController availabilityController = new AvailabilityController(clinic, availabilityService);
-                AppointmentController appointmentController = new AppointmentController(clinic, activityLog, availabilityService);
-                ProfessionalService professionalService = new ProfessionalService(db);
-                ServiceCatalogService serviceCatalogService = new ServiceCatalogService(db);
-                ProfessionalController professionalController = new ProfessionalController(professionalService, serviceCatalogService);
-                ResourceService resourceService = new ResourceService(db);
-                ResourceController resourceController = new ResourceController(resourceService);
-                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService, resourceService);
+                CSVService csvService = new CSVService(db);
                 PatientService patientService = new PatientService(db);
-                PatientController patientController = new PatientController(clinic, patientService);
+                ProfessionalService professionalService = new ProfessionalService(db);
+                ResourceService resourceService = new ResourceService(db);
+                ServiceCatalogService serviceCatalogService = new ServiceCatalogService(db);
                 SeedService seedService = new SeedService(db, patientService, csvService, serviceCatalogService, resourceService);
                 WaitlistService waitlistService = new WaitlistService(db);
+
+                //controllers
+                AppointmentController appointmentController = new AppointmentController(clinic, activityLog, availabilityService, appointmentService);
+                AvailabilityController availabilityController = new AvailabilityController(clinic, availabilityService);
+                PatientController patientController = new PatientController(clinic, patientService);
+                ProfessionalController professionalController = new ProfessionalController(professionalService, serviceCatalogService);
+                ResourceController resourceController = new ResourceController(resourceService);
                 WaitlistController waitlistController = new WaitlistController(clinic, waitlistService);
+
+                //calendar export setup
+                CalendarGateway calendarGateway = new ICal4jCalendarGateway();
+                CalendarExportService calendarExportService = new CalendarExportService(calendarGateway);
+                CalendarExportController calendarExportController = new CalendarExportController(calendarExportService);
+
+                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService, resourceService);
+
+                //start by seeding database with demo data if it's empty
                 seedService.seedIfEmpty();
 
                 for (Patient p : patientService.getAllPatients()) {
@@ -153,7 +139,8 @@ public class AppointmentTrackingSystem {
                         case 8 -> registerProfessionalFlow(clinic, professionalController, clinicLoader); // register professional
                         case 9 -> addResourceFlow(resourceController, clinicLoader); // add resource
                         case 10 -> waitlistMenuFlow(clinic, appointmentController, waitlistController, clinicLoader);
-                        case 11 -> { //exit
+                        case 11 -> exportToCalendarFlow(appointmentController, clinic, calendarExportController);
+                        case 12 -> { //exit
                             scanner.close();
                             ConsolePrinter.goodbye();
                             System.exit(0);
@@ -314,10 +301,30 @@ public class AppointmentTrackingSystem {
     private static Referral askReferral(Service service) {
         String physician = ask("Referring physician (blank to cancel): ");
         if (physician.isEmpty()) return null;
-        String type = ask("Referral type: ");
+        ReferralType type = askReferralType();
         String reason = ask("Clinical reason: ");
         String priority = ask("Priority: ");
         return new Referral(physician, type, service.getName(), "", reason, priority, "VALID");
+    }
+
+    private static ReferralType askReferralType() {
+        int selection = pick("""
+                Referral Type:
+                1. Speciality
+                2. Physician
+                Enter selection (number, leave blank for NONE): 
+                """, 2);
+        switch (selection) {
+            case 1 -> {
+                return ReferralType.SPECIALITY;
+            }
+            case 2 -> {
+                return ReferralType.PHYSICIAN;
+            }
+            default -> {
+                return ReferralType.NONE;
+            }
+        }
     }
 
     // case 3
@@ -775,6 +782,58 @@ public class AppointmentTrackingSystem {
         } else {
             controller.declineOffer(entry);
             System.out.println("No appointment was booked. The patient stays on the waitlist.");
+        }
+    }
+
+    //case 11
+    private static boolean exportToCalendarFlow(AppointmentController appointmentController, Clinic clinic, CalendarExportController calendarExportController) {
+        try {
+            int choice = pick("""
+                    Would you like to export to .ics for...
+                    1. Patient
+                    2. Professional
+                    3. Referral
+                    Enter the option you want (number, blank to cancel): 
+                    """, 3);
+            if (choice < 0) return false;
+            LocalDate from = askDate("From date (yyyy-mm-dd, blank for today): ");
+            if (from == null) from = LocalDate.now();
+            List<CalendarAppointment> appointments = null;
+            switch (choice) {
+                case 1 -> {
+                    // 1. find and select the patient
+                    List<Patient> patients = searchPatientFlow(appointmentController);
+                    if (patients.isEmpty()) return false;
+                    int p = pick("Pick the patient (number, blank to cancel): ", patients.size());
+                    if (p < 0) return false;
+                    Patient patient = patients.get(p);
+                    // 2. get appointments for patient
+                    appointments = appointmentController.findAppointmentsOfPatientForCalendarFrom(patient.getId(), from);
+                }
+                case 2 -> {
+                    // 1. find and select professional
+                    List<Professional> professionals = clinic.getProfessionals();
+                    ConsolePrinter.printProfessionals(professionals);
+                    int pr = pick("Choose a professional (number, blank for any): ", professionals.size());
+                    if (pr < 0) return false;
+                    Professional professional = professionals.get(pr);
+                    // 2. get appointments for professional
+                    appointments = appointmentController.findAppointmentsOfProfessionalForCalendarFrom(professional.getId(), from);
+                }
+                case 3 -> {
+                    // 1. find and select referral
+                    ReferralType referralType = askReferralType();
+                    // 2. get appointments based on referral type
+                    appointments = appointmentController.findAppointmentsOfReferralTypeForCalendarFrom(referralType, from);
+                }
+            }
+
+            calendarExportController.exportCalendar("", appointments);
+
+            return true;
+        } catch (Exception e) {
+            ConsolePrinter.error("Error while exporting to calendar, try again latter.");
+            return false;
         }
     }
 

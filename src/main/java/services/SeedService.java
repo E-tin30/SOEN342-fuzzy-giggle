@@ -54,6 +54,9 @@ public class SeedService {
                 System.out.println("seed-availabilities.csv not found, skipping availability seed.");
             }
         }
+        if (db.countClinic() == 0) {
+            db.addClinic("Clinic", "Montreal");
+        }
     }
 
     private void seedPatients() throws SQLException {

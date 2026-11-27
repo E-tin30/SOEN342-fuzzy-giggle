@@ -1,6 +1,9 @@
 package database;
 
+import domain.Appointment;
 import domain.Availability;
+import domain.Clinic;
+import domain.ReferralType;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -10,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,6 +49,12 @@ public class DatabaseGateway implements AutoCloseable {
     private final PreparedStatement selectActiveWaitlist;
     private final PreparedStatement updateWaitlistPriority;
     private final PreparedStatement updateWaitlistStatus;
+    private final PreparedStatement insertAppointment;
+    private final PreparedStatement selectCalendarAppointmentsByProfessional;
+    private final PreparedStatement selectCalendarAppointmentsByPatient;
+    private final PreparedStatement selectCalendarAppointmentsByReferralType;
+    private final PreparedStatement insertClinic;
+    private final PreparedStatement selectClinicCount;
 
     private final Map<List<String>, Integer> professionalCache = new HashMap<>();
 
@@ -122,6 +132,32 @@ public class DatabaseGateway implements AutoCloseable {
                             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                             CHECK (professional_id IS NOT NULL OR specialization IS NOT NULL)
                         )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS appointment (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            professional_id INTEGER NOT NULL REFERENCES professional(id),
+                            patient_id INTEGER NOT NULL REFERENCES patient(id),
+                            service_id INTEGER NOT NULL REFERENCES service(id),
+                            referral_id INTEGER NOT NULL REFERENCES referral(id),
+                            clinic_id INTEGER,
+                            date TEXT NOT NULL,
+                            start_time TEXT NOT NULL,
+                            end_time TEXT NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'PENDING'
+                                CHECK (status IN ('PENDING', 'CONFIRMED', 'CANCELLED'))
+                        )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS clinic (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT NOT NULL,
+                            location TEXT NOT NULL
+                        )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS referral (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            referral_type TEXT NOT NULL
+                                CHECK (referral_type IN ('SPECIALITY', 'PHYSICIAN', 'NONE'))
+                        )""");
             }
 
             findProfessional = conn.prepareStatement(
@@ -193,6 +229,38 @@ public class DatabaseGateway implements AutoCloseable {
                     """);
             updateWaitlistPriority = conn.prepareStatement("UPDATE waitlist_entry SET priority = ? WHERE id = ?");
             updateWaitlistStatus = conn.prepareStatement("UPDATE waitlist_entry SET status = ? WHERE id = ?");
+            insertAppointment = conn.prepareStatement(
+                    "INSERT OR IGNORE INTO appointment(professional_id, patient_id, service_id, referral_id, "
+                            + "clinic_id, date, start_time, end_time, status) "
+                            + "SELECT ?, ?, id, ?, ?, ?, ?, ?, ? FROM service WHERE name = ?");
+            selectCalendarAppointmentsByProfessional = conn.prepareStatement("""
+                    SELECT id, date, start_time, end_time
+                    FROM appointment
+                    WHERE professional_id = ?
+                      AND date >= ?
+                      AND status <> 'CANCELLED'
+                    ORDER BY date, start_time
+                    """);
+            selectCalendarAppointmentsByPatient = conn.prepareStatement("""
+                    SELECT a.id, a.date, a.start_time, a.end_time, p.title, p.first_name, p.last_name
+                    FROM appointment a
+                    JOIN professional p ON p.id = a.professional_id
+                    WHERE a.patient_id = ?
+                      AND a.date >= ?
+                      AND a.status <> 'CANCELLED'
+                    ORDER BY a.date, a.start_time
+                    """);
+            selectCalendarAppointmentsByReferralType = conn.prepareStatement("""
+                SELECT a.id, a.date, a.start_time, a.end_time
+                FROM appointment a
+                JOIN referral r ON r.id = a.referral_id
+                WHERE r.referral_type = ?
+                  AND a.date >= ?
+                  AND a.status <> 'CANCELLED'
+                ORDER BY a.date, a.start_time
+                """);
+            insertClinic = conn.prepareStatement("INSERT OR IGNORE INTO clinic (name, location) VALUES (?,?)");
+            selectClinicCount = conn.prepareStatement("SELECT COUNT(*) FROM clinic");
         } catch (SQLException e) {
             conn.close();
             throw e;
@@ -494,16 +562,98 @@ public class DatabaseGateway implements AutoCloseable {
         return updateWaitlistStatus.executeUpdate() > 0;
     }
 
-    //added here temporarily because the system must start from fresh at the beginning of every run (I think it will be removed in iteration 3)
-//    public void clearAll() throws SQLException {
-//        try (Statement st = conn.createStatement()) {
-//            st.executeUpdate("DELETE FROM availability");
-//            st.executeUpdate("DELETE FROM professional");
-//            // resets ids at 1
-//            st.executeUpdate("DELETE FROM sqlite_sequence WHERE name IN ('availability', 'professional')");
-//        }
-//        professionalCache.clear();
-//    }
+    //Appointments
+    public int addAppointment(int professionalId, int patientId, String serviceName,
+                              Integer referralId, Integer clinicId,
+                              LocalDate date, LocalTime start, LocalTime end,
+                              String status) throws SQLException {
+        insertAppointment.setInt(1, professionalId);
+        insertAppointment.setInt(2, patientId);
+        if (referralId == null) {
+            insertAppointment.setNull(3, Types.INTEGER);
+        } else {
+            insertAppointment.setInt(3, referralId);
+        }
+        if (clinicId == null) {
+            insertAppointment.setNull(4, Types.INTEGER);
+        } else {
+            insertAppointment.setInt(4, clinicId);
+        }
+        insertAppointment.setString(5, date.toString());
+        insertAppointment.setString(6, start.toString());
+        insertAppointment.setString(7, end.toString());
+        insertAppointment.setString(8, status);
+        insertAppointment.setString(9, serviceName);
+        if (insertAppointment.executeUpdate() == 0) return -1;
+        try (ResultSet keys = insertAppointment.getGeneratedKeys()) {
+            keys.next();
+            return keys.getInt(1);
+        }
+    }
+
+    public int addClinic(String name, String location) throws SQLException {
+        insertClinic.setString(1, name);
+        insertClinic.setString(2, location);
+        if(insertClinic.executeUpdate() == 0) return -1;
+        try (ResultSet keys = insertClinic.getGeneratedKeys()) {
+            keys.next();
+            return keys.getInt(1);
+        }
+    }
+    public int countClinic() throws SQLException {
+        try (ResultSet rs = selectClinicCount.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    public List<CalendarAppointment> findAppointmentsOfProfessionalForCalendarFrom(int professionalId, LocalDate from) throws SQLException {
+        List<CalendarAppointment> result = new ArrayList<>();
+        selectCalendarAppointmentsByProfessional.setInt(1, professionalId);
+        selectCalendarAppointmentsByProfessional.setString(2, from.toString());
+        try (ResultSet rs = selectCalendarAppointmentsByProfessional.executeQuery()) {
+            while (rs.next()) {
+                LocalDate date = LocalDate.parse(rs.getString("date"));
+                LocalDateTime start = LocalDateTime.of(date, LocalTime.parse(rs.getString("start_time")));
+                LocalDateTime end = LocalDateTime.of(date, LocalTime.parse(rs.getString("end_time")));
+                result.add(new CalendarAppointment(rs.getInt("id"), start, end, null, null));
+            }
+        }
+        return result;
+    }
+
+    public List<CalendarAppointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException {
+        List<CalendarAppointment> result = new ArrayList<>();
+        selectCalendarAppointmentsByPatient.setInt(1, patientId);
+        selectCalendarAppointmentsByPatient.setString(2, from.toString());
+        try (ResultSet rs = selectCalendarAppointmentsByPatient.executeQuery()) {
+            while (rs.next()) {
+                LocalDate date = LocalDate.parse(rs.getString("date"));
+                LocalDateTime start = LocalDateTime.of(date, LocalTime.parse(rs.getString("start_time")));
+                LocalDateTime end = LocalDateTime.of(date, LocalTime.parse(rs.getString("end_time")));
+                String professional = rs.getString("title") + " "
+                        + rs.getString("first_name") + " "
+                        + rs.getString("last_name");
+                result.add(new CalendarAppointment(rs.getInt("id"), start, end, professional, null));
+            }
+        }
+        return result;
+    }
+
+    public List<CalendarAppointment> findAppointmentsOfReferralTypeForCalendarFrom(ReferralType referralType, LocalDate from) throws SQLException {
+        List<CalendarAppointment> result = new ArrayList<>();
+        selectCalendarAppointmentsByReferralType.setString(1, referralType.name());
+        selectCalendarAppointmentsByReferralType.setString(2, from.toString());
+        try (ResultSet rs = selectCalendarAppointmentsByReferralType.executeQuery()) {
+            while (rs.next()) {
+                LocalDate date = LocalDate.parse(rs.getString("date"));
+                LocalDateTime start = LocalDateTime.of(date, LocalTime.parse(rs.getString("start_time")));
+                LocalDateTime end = LocalDateTime.of(date, LocalTime.parse(rs.getString("end_time")));
+                result.add(new CalendarAppointment(rs.getInt("id"), start, end, null, referralType));
+            }
+        }
+        return result;
+    }
 
     // forced by the AutoCloseable interface to clear everything
     @Override
@@ -533,6 +683,11 @@ public class DatabaseGateway implements AutoCloseable {
         selectActiveWaitlist.close();
         updateWaitlistPriority.close();
         updateWaitlistStatus.close();
+        insertAppointment.close();
+        selectCalendarAppointmentsByProfessional.close();
+        selectCalendarAppointmentsByPatient.close();
+        selectCalendarAppointmentsByReferralType.close();
+        insertClinic.close();
         conn.close();
     }
 }
