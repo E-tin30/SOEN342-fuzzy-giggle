@@ -5,7 +5,7 @@ import database.DatabaseGateway;
 import domain.Availability;
 import domain.DateRange;
 import domain.Professional;
-import domain.RepetitionPattern;
+import domain.pattern.RepetitionPattern;
 import lombok.RequiredArgsConstructor;
 
 import java.sql.SQLException;

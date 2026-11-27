@@ -16,23 +16,15 @@ import domain.Patient;
 import domain.PatientSearchSpecification;
 import domain.Professional;
 import domain.Referral;
-import domain.RepetitionPattern;
+import domain.pattern.RepetitionPattern;
 import domain.Resource;
 import domain.ResourceType;
 import domain.Service;
 import domain.WaitlistEntry;
-import domain.MonthlyPattern;
-import domain.WeeklyPattern;
-import domain.DailyPattern;
-import services.AvailabilityService;
-import services.CSVService;
-import services.ClinicLoader;
-import services.PatientService;
-import services.ProfessionalService;
-import services.ResourceService;
-import services.SeedService;
-import services.ServiceCatalogService;
-import services.WaitlistService;
+import domain.pattern.MonthlyPattern;
+import domain.pattern.WeeklyPattern;
+import domain.pattern.DailyPattern;
+import services.*;
 import utils.ConsolePrinter;
 
 import java.nio.file.Files;
@@ -63,24 +55,31 @@ public class AppointmentTrackingSystem {
                 //updated: no longer clearing database on start
                 //db.clearAll();
 
-                Clinic clinic = new Clinic("Clinic", "Montreal");
+                Clinic clinic = new Clinic(1, "Clinic", "Montreal");
                 ActivityLog activityLog = new ActivityLog();
 
-                CSVService csvService = new CSVService(db);
+                //services
+                AppointmentService appointmentService = new AppointmentService(db);
                 AvailabilityService availabilityService = new AvailabilityService(db);
-                AvailabilityController availabilityController = new AvailabilityController(clinic, availabilityService);
-                AppointmentController appointmentController = new AppointmentController(clinic, activityLog, availabilityService);
-                ProfessionalService professionalService = new ProfessionalService(db);
-                ServiceCatalogService serviceCatalogService = new ServiceCatalogService(db);
-                ProfessionalController professionalController = new ProfessionalController(professionalService, serviceCatalogService);
-                ResourceService resourceService = new ResourceService(db);
-                ResourceController resourceController = new ResourceController(resourceService);
-                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService, resourceService);
+                CSVService csvService = new CSVService(db);
                 PatientService patientService = new PatientService(db);
-                PatientController patientController = new PatientController(clinic, patientService);
+                ProfessionalService professionalService = new ProfessionalService(db);
+                ResourceService resourceService = new ResourceService(db);
+                ServiceCatalogService serviceCatalogService = new ServiceCatalogService(db);
                 SeedService seedService = new SeedService(db, patientService, csvService, serviceCatalogService, resourceService);
                 WaitlistService waitlistService = new WaitlistService(db);
+
+                //controllers
+                AppointmentController appointmentController = new AppointmentController(clinic, activityLog, availabilityService, appointmentService);
+                AvailabilityController availabilityController = new AvailabilityController(clinic, availabilityService);
+                PatientController patientController = new PatientController(clinic, patientService);
+                ProfessionalController professionalController = new ProfessionalController(professionalService, serviceCatalogService);
+                ResourceController resourceController = new ResourceController(resourceService);
                 WaitlistController waitlistController = new WaitlistController(clinic, waitlistService);
+
+                ClinicLoader clinicLoader = new ClinicLoader(clinic, availabilityService, professionalService, serviceCatalogService, resourceService);
+
+                //start by seeding database with demo data if it's empty
                 seedService.seedIfEmpty();
 
                 for (Patient p : patientService.getAllPatients()) {

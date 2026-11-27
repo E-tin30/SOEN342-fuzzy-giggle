@@ -5,10 +5,12 @@ import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.Setter;
 
 @AllArgsConstructor
 @Getter
 public class Clinic {
+    private final int id; //set by db
     private final String name;
     private final String location;
     private final List<Service> offeredServices = new ArrayList<>();

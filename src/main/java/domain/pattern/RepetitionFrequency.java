@@ -1,4 +1,4 @@
-package domain;
+package domain.pattern;
 
 public enum RepetitionFrequency {
     DAILY,

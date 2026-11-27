@@ -1,14 +1,13 @@
 package controllers;
 
 import java.sql.SQLException;
-import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.List;
 
 import domain.*;
 import lombok.RequiredArgsConstructor;
 import services.AvailabilityService;
+import services.AppointmentService;
 import utils.ConsolePrinter;
 
 @RequiredArgsConstructor
@@ -19,6 +18,7 @@ public class AppointmentController {
     private Service currentService;
     private Referral currentReferral;
     private final AvailabilityService availabilityService;
+    private final AppointmentService appointmentService;
 
     // forward to clinic
     public List<Patient> findPatient(PatientSearchSpecification spec){
@@ -85,6 +85,7 @@ public class AppointmentController {
         Availability booked;
         try {
             booked = availabilityService.bookSlot(availability, start, start.plusMinutes(currentService.getDurationMinutes()));
+            appointmentService.save(appointment);
         } catch (SQLException | RuntimeException e) {
             availability.getAppointments().remove(appointment); // nothing was saved, so undo
             ConsolePrinter.error("Could not book the appointment: " + e.getMessage());

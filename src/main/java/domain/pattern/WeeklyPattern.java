@@ -1,4 +1,4 @@
-package domain;
+package domain.pattern;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;

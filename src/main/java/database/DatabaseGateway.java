@@ -1,6 +1,7 @@
 package database;
 
 import domain.Availability;
+import domain.Clinic;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -48,6 +49,8 @@ public class DatabaseGateway implements AutoCloseable {
     private final PreparedStatement insertAppointment;
     private final PreparedStatement selectAppointmentsByProfessional;
     private final PreparedStatement selectAppointmentsByPatient;
+    private final PreparedStatement insertClinic;
+    private final PreparedStatement selectClinicCount;
 
     private final Map<List<String>, Integer> professionalCache = new HashMap<>();
 
@@ -138,6 +141,12 @@ public class DatabaseGateway implements AutoCloseable {
                             end_time TEXT NOT NULL,
                             status TEXT NOT NULL DEFAULT 'PENDING'
                                 CHECK (status IN ('PENDING', 'CONFIRMED', 'CANCELLED'))
+                        )""");
+                st.execute("""
+                        CREATE TABLE IF NOT EXISTS clinic (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT NOT NULL,
+                            location TEXT NOT NULL
                         )""");
             }
 
@@ -230,6 +239,8 @@ public class DatabaseGateway implements AutoCloseable {
                     WHERE a.patient_id = ?
                     ORDER BY a.date, a.start_time
                     """);
+            insertClinic = conn.prepareStatement("INSERT OR IGNORE INTO clinic (name, location) VALUES (?,?)");
+            selectClinicCount = conn.prepareStatement("SELECT COUNT(*) FROM clinic");
         } catch (SQLException e) {
             conn.close();
             throw e;
@@ -560,6 +571,22 @@ public class DatabaseGateway implements AutoCloseable {
         }
     }
 
+    public int addClinic(String name, String location) throws SQLException {
+        insertClinic.setString(1, name);
+        insertClinic.setString(2, location);
+        if(insertClinic.executeUpdate() == 0) return -1;
+        try (ResultSet keys = insertClinic.getGeneratedKeys()) {
+            keys.next();
+            return keys.getInt(1);
+        }
+    }
+    public int countClinic() throws SQLException {
+        try (ResultSet rs = selectClinicCount.executeQuery()) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
     public List<AppointmentRow> findAppointmentsOfProfessional(int professionalId) throws SQLException {
         selectAppointmentsByProfessional.setInt(1, professionalId);
         return readAppointments(selectAppointmentsByProfessional);
@@ -636,6 +663,7 @@ public class DatabaseGateway implements AutoCloseable {
         insertAppointment.close();
         selectAppointmentsByProfessional.close();
         selectAppointmentsByPatient.close();
+        insertClinic.close();
         conn.close();
     }
 }
