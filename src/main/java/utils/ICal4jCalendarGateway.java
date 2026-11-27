@@ -29,7 +29,7 @@ public class ICal4jCalendarGateway implements CalendarGateway {
                     a.start().atZone(ZONE).toInstant(),
                     a.end().atZone(ZONE).toInstant(),
                     "Appointment with " + a.professional());
-            event.add(new Uid("appt-" + a.id() + "@yourclinic.ca"));
+            event.add(new Uid("appt-" + a.id() + "@clinic.ca"));
             calendar.add(event);
         }
 
@@ -37,6 +37,7 @@ public class ICal4jCalendarGateway implements CalendarGateway {
             new CalendarOutputter().output(calendar, out);
             return out.toByteArray();
         } catch (IOException e) {
+            ConsolePrinter.error("Could not generate .ics file.");
             throw new CalendarExportException("Could not generate .ics file", e);
         }
     }
