@@ -48,7 +48,8 @@ public class ConsolePrinter {
                 8. Register a professional
                 9. Add a resource
                 10. Manage the waitlist
-                11. Exit
+                11. Export to Calendar
+                12. Exit
                 Enter the number of the option you want and press enter: 
                 """);
     }

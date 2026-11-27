@@ -5,6 +5,8 @@ import domain.Appointment;
 import lombok.RequiredArgsConstructor;
 
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.List;
 
 @RequiredArgsConstructor
 public class AppointmentService {
@@ -20,6 +22,36 @@ public class AppointmentService {
             db.rollback();
             throw e;
         }
+    }
 
+    public List<Appointment> findAppointmentsOfProfessionalForCalendarFrom(int professionalId, LocalDate from) throws SQLException {
+        db.begin();
+        try{
+            return db.findAppointmentsOfProfessionalForCalendarFrom(professionalId, from);
+        } catch (SQLException e) {
+            db.rollback();
+            throw e;
+        }
+    }
+
+    public List<Appointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException{
+        db.begin();
+        try{
+            return db.findAppointmentsOfPatientForCalendarFrom(patientId, from);
+        } catch (SQLException e) {
+            db.rollback();
+            throw e;
+        }
+    }
+
+    public List<Appointment> findAppointmentsOfReferralTypeForCalendarFrom(LocalDate from) throws SQLException {
+        //TODO: add referralType to params
+        db.begin();
+        try{
+            return db.findAppointmentsOfReferralTypeForCalendarFrom( from);
+        } catch (SQLException e) {
+            db.rollback();
+            throw e;
+        }
     }
 }

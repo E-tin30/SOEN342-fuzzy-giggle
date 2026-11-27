@@ -1,6 +1,7 @@
 package controllers;
 
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -102,5 +103,15 @@ public class AppointmentController {
         this.currentReferral = null;
 
         return appointment;
+    }
+
+    public List<Appointment> findAppointmentsOfProfessionalForCalendarFrom(int professionalId, LocalDate from) throws SQLException {
+        return appointmentService.findAppointmentsOfProfessionalForCalendarFrom(professionalId, from);
+    }
+    public List<Appointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException{
+        return appointmentService.findAppointmentsOfPatientForCalendarFrom(patientId, from);
+    }
+    public List<Appointment> findAppointmentsOfReferralTypeForCalendarFrom( LocalDate from) throws SQLException {
+        return appointmentService.findAppointmentsOfReferralTypeForCalendarFrom( from);
     }
 }

@@ -1,5 +1,6 @@
 package database;
 
+import domain.Appointment;
 import domain.Availability;
 import domain.Clinic;
 
@@ -587,50 +588,20 @@ public class DatabaseGateway implements AutoCloseable {
         }
     }
 
-    public List<AppointmentRow> findAppointmentsOfProfessional(int professionalId) throws SQLException {
-        selectAppointmentsByProfessional.setInt(1, professionalId);
-        return readAppointments(selectAppointmentsByProfessional);
+    public List<Appointment> findAppointmentsOfProfessionalForCalendarFrom(int professionalId, LocalDate from) throws SQLException {
+        //TODO
+        return null;
     }
 
-    public List<AppointmentRow> findAppointmentsOfPatient(int patientId) throws SQLException {
-        selectAppointmentsByPatient.setInt(1, patientId);
-        return readAppointments(selectAppointmentsByPatient);
+    public List<Appointment> findAppointmentsOfPatientForCalendarFrom(int patientId, LocalDate from) throws SQLException {
+        //TODO
+        return null;
     }
 
-    private List<AppointmentRow> readAppointments(PreparedStatement ps) throws SQLException {
-        List<AppointmentRow> rows = new ArrayList<>();
-        try (ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                int referral = rs.getInt("referral_id");
-                Integer referralId = rs.wasNull() ? null : referral;
-                int clinic = rs.getInt("clinic_id");
-                Integer clinicId = rs.wasNull() ? null : clinic;
-                rows.add(new AppointmentRow(
-                        rs.getInt("id"),
-                        rs.getInt("professional_id"),
-                        rs.getInt("patient_id"),
-                        rs.getString("service_name"),
-                        referralId,
-                        clinicId,
-                        rs.getString("date"),
-                        rs.getString("start_time"),
-                        rs.getString("end_time"),
-                        rs.getString("status")));
-            }
-        }
-        return rows;
+    public List<Appointment> findAppointmentsOfReferralTypeForCalendarFrom( LocalDate from) throws SQLException {
+        //TODO
+        return null;
     }
-
-    //added here temporarily because the system must start from fresh at the beginning of every run (I think it will be removed in iteration 3)
-//    public void clearAll() throws SQLException {
-//        try (Statement st = conn.createStatement()) {
-//            st.executeUpdate("DELETE FROM availability");
-//            st.executeUpdate("DELETE FROM professional");
-//            // resets ids at 1
-//            st.executeUpdate("DELETE FROM sqlite_sequence WHERE name IN ('availability', 'professional')");
-//        }
-//        professionalCache.clear();
-//    }
 
     // forced by the AutoCloseable interface to clear everything
     @Override

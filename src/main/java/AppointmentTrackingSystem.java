@@ -52,8 +52,6 @@ public class AppointmentTrackingSystem {
             Files.createDirectories(Path.of("data"));
 
             try (DatabaseGateway db = new DatabaseGateway("jdbc:sqlite:data/app.db")) {
-                //updated: no longer clearing database on start
-                //db.clearAll();
 
                 Clinic clinic = new Clinic(1, "Clinic", "Montreal");
                 ActivityLog activityLog = new ActivityLog();
@@ -152,7 +150,8 @@ public class AppointmentTrackingSystem {
                         case 8 -> registerProfessionalFlow(clinic, professionalController, clinicLoader); // register professional
                         case 9 -> addResourceFlow(resourceController, clinicLoader); // add resource
                         case 10 -> waitlistMenuFlow(clinic, appointmentController, waitlistController, clinicLoader);
-                        case 11 -> { //exit
+                        case 11 -> exportToCalendarFlow(appointmentController, clinic);
+                        case 12 -> { //exit
                             scanner.close();
                             ConsolePrinter.goodbye();
                             System.exit(0);
@@ -775,6 +774,49 @@ public class AppointmentTrackingSystem {
             controller.declineOffer(entry);
             System.out.println("No appointment was booked. The patient stays on the waitlist.");
         }
+    }
+
+    //case 11
+    private static boolean exportToCalendarFlow(AppointmentController appointmentController, Clinic clinic) {
+        int choice = pick("""
+                Would you like to export to .ics for...
+                1. Patient
+                2. Professional
+                3. Referral
+                Enter the option you want (number, blank to cancel): 
+                """, 3);
+        if (choice < 0) return false;
+        LocalDate from = askDate("From date (yyyy-mm-dd, blank for today): ");
+        if(from == null) from = LocalDate.now();
+        List<Appointment> appointments;
+        switch (choice){
+            case 1 -> {
+                // 1. find and select the patient
+                List<Patient> patients = searchPatientFlow(appointmentController);
+                if (patients.isEmpty()) return false;
+                int p = pick("Pick the patient (number, blank to cancel): ", patients.size());
+                if (p < 0) return false;
+                Patient patient = patients.get(p);
+
+            }
+            case 2 -> {
+                // 1. find and select professional
+                List<Professional> professionals = clinic.getProfessionals();
+                ConsolePrinter.printProfessionals(professionals);
+                int pr = pick("Choose a professional (number, blank for any): ", professionals.size());
+                if (pr < 0) return false;
+                Professional professional = professionals.get(pr);
+            }
+            case 3 -> {
+                // 1. find and select referral
+                // TODO: complete referrals
+            }
+        }
+
+
+
+
+        return true;
     }
 
 }
